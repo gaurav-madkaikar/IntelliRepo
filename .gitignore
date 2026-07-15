@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.intellirepo-demo/
+.next/
+.pnpm-store/
+.turbo/
+coverage/
+dist/
+node_modules/
+*.tsbuildinfo
+
+# Local service data and diagnostics
+.data/
+logs/

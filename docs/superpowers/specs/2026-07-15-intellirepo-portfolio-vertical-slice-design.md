@@ -185,13 +185,13 @@ Extraction has two layers:
 
 ### Framework support
 
-| Adapter | Supported patterns |
-|---|---|
+| Adapter     | Supported patterns                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
 | Spring Boot | Controllers, composed mappings, request/response types, services, repositories, configuration properties, tests |
-| Ktor | `routing`, nested `route`, verb blocks, handlers, plugins, and authentication blocks |
-| Vert.x | Router declarations, route paths, methods, handler chains, verticles, and configuration access |
-| NestJS | Controllers, route decorators, providers, guards, interceptors, pipes, DTOs, and tests |
-| Express | App/router methods, nested routers, middleware chains, handlers, and environment variables |
+| Ktor        | `routing`, nested `route`, verb blocks, handlers, plugins, and authentication blocks                            |
+| Vert.x      | Router declarations, route paths, methods, handler chains, verticles, and configuration access                  |
+| NestJS      | Controllers, route decorators, providers, guards, interceptors, pipes, DTOs, and tests                          |
+| Express     | App/router methods, nested routers, middleware chains, handlers, and environment variables                      |
 
 Endpoint facts normalize HTTP method, resolved path, declared path, handler, inferred request/response types, middleware, authentication, source reference, and confidence.
 
@@ -319,18 +319,18 @@ Release acceptance requires the complete demo to run from a clean documented set
 
 ## 13. Twelve-week delivery sequence
 
-| Weeks | Outcome |
-|---|---|
-| 1–2 | Monorepo, Compose services, canonical model, repository registration, project detection, and job lifecycle |
-| 3–4 | Java, Kotlin, and TypeScript extraction with normalized facts and provenance |
-| 5 | Five framework adapters with golden fixtures |
-| 6 | Canonical fact store, incremental replacement, Neo4j projection, and affected-subgraph queries |
-| 7 | Semantic change diff, test recommendations, documentation impact, and risk scoring |
-| 8 | Markdown generation, claim extraction, stale/gap detection, and Mermaid output |
-| 9 | pgvector retrieval, Ollama integration, grounded Q&A, and degraded mode |
-| 10 | Six dashboard experiences and the integrated demo flow |
-| 11 | Local Git workflow, GitHub PR analysis, privacy controls, and performance tuning |
-| 12 | End-to-end hardening, demo fixtures, onboarding, screenshots, and release polish |
+| Weeks | Outcome                                                                                                    |
+| ----- | ---------------------------------------------------------------------------------------------------------- |
+| 1–2   | Monorepo, Compose services, canonical model, repository registration, project detection, and job lifecycle |
+| 3–4   | Java, Kotlin, and TypeScript extraction with normalized facts and provenance                               |
+| 5     | Five framework adapters with golden fixtures                                                               |
+| 6     | Canonical fact store, incremental replacement, Neo4j projection, and affected-subgraph queries             |
+| 7     | Semantic change diff, test recommendations, documentation impact, and risk scoring                         |
+| 8     | Markdown generation, claim extraction, stale/gap detection, and Mermaid output                             |
+| 9     | pgvector retrieval, Ollama integration, grounded Q&A, and degraded mode                                    |
+| 10    | Six dashboard experiences and the integrated demo flow                                                     |
+| 11    | Local Git workflow, GitHub PR analysis, privacy controls, and performance tuning                           |
+| 12    | End-to-end hardening, demo fixtures, onboarding, screenshots, and release polish                           |
 
 ## 14. Design decisions
 

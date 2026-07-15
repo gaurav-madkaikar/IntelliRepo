@@ -79,18 +79,18 @@ The bootstrap task must pin compatible versions in the lockfile. The plan intent
 
 ## 4. Module interfaces and ownership
 
-| Module | Owns | Must not own |
-|---|---|---|
-| `domain` | Entity/relationship model, identity, confidence, provenance, change-set types | SQL, Cypher, AST libraries |
-| `repository` | Safe repository access, Git revisions/diffs, discovery inputs | Parsing or graph semantics |
-| `parsing` | Language parsing, framework adapters, normalization, symbol-resolution diagnostics | Direct database writes |
-| `catalog` | Canonical facts, revisions, jobs, docs, claims, outbox transactions | Graph traversal or model prose |
-| `graph` | Neo4j projection, projection state, allowlisted traversals | Canonical truth |
-| `embeddings` | Chunk selection, redaction, embedding projection, semantic retrieval | Structural conclusions |
-| `impact` | Semantic diff, affected subgraph, test ranking, documentation impact, risk | AST parsing or UI formatting |
-| `documentation` | Markdown claims, deterministic stale/gap rules, generation plans, review diffs | Automatic merge |
-| `qa` | Intent routing, evidence packs, answer validation | Unrestricted Cypher |
-| `ai` | Ollama generation/embedding adapters, schema validation, degraded state | Repository-specific rules |
+| Module          | Owns                                                                               | Must not own                   |
+| --------------- | ---------------------------------------------------------------------------------- | ------------------------------ |
+| `domain`        | Entity/relationship model, identity, confidence, provenance, change-set types      | SQL, Cypher, AST libraries     |
+| `repository`    | Safe repository access, Git revisions/diffs, discovery inputs                      | Parsing or graph semantics     |
+| `parsing`       | Language parsing, framework adapters, normalization, symbol-resolution diagnostics | Direct database writes         |
+| `catalog`       | Canonical facts, revisions, jobs, docs, claims, outbox transactions                | Graph traversal or model prose |
+| `graph`         | Neo4j projection, projection state, allowlisted traversals                         | Canonical truth                |
+| `embeddings`    | Chunk selection, redaction, embedding projection, semantic retrieval               | Structural conclusions         |
+| `impact`        | Semantic diff, affected subgraph, test ranking, documentation impact, risk         | AST parsing or UI formatting   |
+| `documentation` | Markdown claims, deterministic stale/gap rules, generation plans, review diffs     | Automatic merge                |
+| `qa`            | Intent routing, evidence packs, answer validation                                  | Unrestricted Cypher            |
+| `ai`            | Ollama generation/embedding adapters, schema validation, degraded state            | Repository-specific rules      |
 
 ## 5. Canonical storage outline
 
@@ -858,45 +858,45 @@ At the end of each week:
 
 ## 9. Primary risks and mitigations
 
-| Risk | Early signal | Mitigation |
-|---|---|---|
-| Five framework adapters exceed Week 5 | Fixture coverage remains incomplete midway through Week 5 | Support explicit common patterns first; emit diagnostics for the rest; do not add heuristics without evidence |
-| Java/Kotlin call resolution is too shallow | Impact reports contain many ambiguous callees | Prioritize route-to-handler-to-injected-service flows and preserve tentative confidence for unresolved general calls |
-| Neo4j and PostgreSQL drift | Projection revision lags or rebuild differs | Keep canonical facts in PostgreSQL; require replay/rebuild equivalence tests and visible projection state |
-| Ollama latency harms the demo | Q&A and generation exceed presentation tolerance | Preselect a documented local model, cap context, stream status, cache by evidence hash, and keep deterministic features fully usable |
-| Medium-repository indexing misses target | Week 6 benchmark approaches five minutes before embeddings | Batch writes, bound concurrency, reuse parser projects, profile before adding AI work, and benchmark structural indexing separately |
-| Stale-doc detection produces noisy findings | Fixture reviewers reject many findings | Restrict confirmed mismatches to structured claims; downgrade ambiguous prose to review candidates |
-| Dashboard work starts too late | No usable workflow by early Week 10 | Build minimal scan/status pages earlier if needed; keep full visual polish scoped to Week 10–12 |
-| GitHub integration consumes core time | Authentication and patch edge cases exceed two days | Preserve local workflow as release-critical and cut live comment posting before cutting local analysis |
+| Risk                                        | Early signal                                               | Mitigation                                                                                                                           |
+| ------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Five framework adapters exceed Week 5       | Fixture coverage remains incomplete midway through Week 5  | Support explicit common patterns first; emit diagnostics for the rest; do not add heuristics without evidence                        |
+| Java/Kotlin call resolution is too shallow  | Impact reports contain many ambiguous callees              | Prioritize route-to-handler-to-injected-service flows and preserve tentative confidence for unresolved general calls                 |
+| Neo4j and PostgreSQL drift                  | Projection revision lags or rebuild differs                | Keep canonical facts in PostgreSQL; require replay/rebuild equivalence tests and visible projection state                            |
+| Ollama latency harms the demo               | Q&A and generation exceed presentation tolerance           | Preselect a documented local model, cap context, stream status, cache by evidence hash, and keep deterministic features fully usable |
+| Medium-repository indexing misses target    | Week 6 benchmark approaches five minutes before embeddings | Batch writes, bound concurrency, reuse parser projects, profile before adding AI work, and benchmark structural indexing separately  |
+| Stale-doc detection produces noisy findings | Fixture reviewers reject many findings                     | Restrict confirmed mismatches to structured claims; downgrade ambiguous prose to review candidates                                   |
+| Dashboard work starts too late              | No usable workflow by early Week 10                        | Build minimal scan/status pages earlier if needed; keep full visual polish scoped to Week 10–12                                      |
+| GitHub integration consumes core time       | Authentication and patch edge cases exceed two days        | Preserve local workflow as release-critical and cut live comment posting before cutting local analysis                               |
 
 ## 10. Feature traceability
 
-| Requested capability | Primary delivery tasks | MVP disposition |
-|---|---|---|
-| Repository intelligence | 1.3, 3.1–5.2 | Included |
-| Incremental knowledge graph | 2.3, 6.1–6.2 | Included |
-| Automated documentation | 8.2 | Included |
-| Stale documentation detection | 8.1 | Included |
-| Pull request impact analysis | 7.1–7.3, 11.1 | Included; one idempotent comment |
-| Codebase question answering | 9.1–9.2 | Included |
-| Test impact analysis | 7.2 | Included |
-| API and route discovery | 5.1–5.2 | Included for five adapters |
-| Developer onboarding docs | 8.2 | Included |
-| Graph-based exploration | 6.2, 10.2 | Included as bounded expansion |
-| Change summaries | 7.3 | Included |
-| Documentation health dashboard | 8.1, 10.2 | Included |
-| Missing documentation detection | 8.1 | Included |
-| Configuration/environment docs | 3.2, 4.3, 8.2 | Included with secret redaction |
-| Dependency and build insight | 4.3 | Included |
-| Change risk scoring | 7.2 | Included and deterministic |
-| Documentation update pull requests | — | Deferred; local reviewed diffs only |
-| Multi-language support | 3.2, 4.1–4.2 | Java, Kotlin, and TypeScript included |
-| Architecture documentation | 8.2 | Included |
-| Mermaid diagrams | 8.2 | Included from graph facts |
-| Source traceability | 1.3 and every extractor | Included |
-| Confidence labels | 1.3 and every inference module | Included |
-| Human review workflow | 8.2, 10.2 | Included; no automatic merge |
-| Local demo mode | 12.1–12.2 | Included |
+| Requested capability               | Primary delivery tasks         | MVP disposition                       |
+| ---------------------------------- | ------------------------------ | ------------------------------------- |
+| Repository intelligence            | 1.3, 3.1–5.2                   | Included                              |
+| Incremental knowledge graph        | 2.3, 6.1–6.2                   | Included                              |
+| Automated documentation            | 8.2                            | Included                              |
+| Stale documentation detection      | 8.1                            | Included                              |
+| Pull request impact analysis       | 7.1–7.3, 11.1                  | Included; one idempotent comment      |
+| Codebase question answering        | 9.1–9.2                        | Included                              |
+| Test impact analysis               | 7.2                            | Included                              |
+| API and route discovery            | 5.1–5.2                        | Included for five adapters            |
+| Developer onboarding docs          | 8.2                            | Included                              |
+| Graph-based exploration            | 6.2, 10.2                      | Included as bounded expansion         |
+| Change summaries                   | 7.3                            | Included                              |
+| Documentation health dashboard     | 8.1, 10.2                      | Included                              |
+| Missing documentation detection    | 8.1                            | Included                              |
+| Configuration/environment docs     | 3.2, 4.3, 8.2                  | Included with secret redaction        |
+| Dependency and build insight       | 4.3                            | Included                              |
+| Change risk scoring                | 7.2                            | Included and deterministic            |
+| Documentation update pull requests | —                              | Deferred; local reviewed diffs only   |
+| Multi-language support             | 3.2, 4.1–4.2                   | Java, Kotlin, and TypeScript included |
+| Architecture documentation         | 8.2                            | Included                              |
+| Mermaid diagrams                   | 8.2                            | Included from graph facts             |
+| Source traceability                | 1.3 and every extractor        | Included                              |
+| Confidence labels                  | 1.3 and every inference module | Included                              |
+| Human review workflow              | 8.2, 10.2                      | Included; no automatic merge          |
+| Local demo mode                    | 12.1–12.2                      | Included                              |
 
 ## 11. Recommended implementation start
 

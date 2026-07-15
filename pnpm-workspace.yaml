@@ -1,0 +1,20 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+
+confirmModulesPurge: false
+
+catalog:
+  "@nestjs/common": latest
+  "@nestjs/core": latest
+  "@nestjs/platform-express": latest
+  next: latest
+  react: latest
+  react-dom: latest
+  reflect-metadata: latest
+  rxjs: latest
+  zod: latest
