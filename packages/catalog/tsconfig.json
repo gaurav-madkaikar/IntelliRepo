@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "tsBuildInfoFile": "dist/catalog.tsbuildinfo"
+  },
+  "include": ["migrations/**/*.ts", "src/**/*.ts"],
+  "references": [{ "path": "../contracts" }, { "path": "../domain" }, { "path": "../testkit" }]
+}

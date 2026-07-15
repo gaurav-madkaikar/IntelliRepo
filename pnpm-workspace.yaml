@@ -3,8 +3,12 @@ packages:
   - packages/*
 
 allowBuilds:
+  cpu-features: false
   esbuild: true
+  msgpackr-extract: false
+  protobufjs: false
   sharp: true
+  ssh2: false
 
 confirmModulesPurge: false
 
@@ -12,9 +16,15 @@ catalog:
   "@nestjs/common": latest
   "@nestjs/core": latest
   "@nestjs/platform-express": latest
+  "@testcontainers/postgresql": latest
+  bullmq: latest
+  ioredis: 5.10.1
+  kysely: latest
   next: latest
+  pg: latest
   react: latest
   react-dom: latest
   reflect-metadata: latest
   rxjs: latest
+  testcontainers: latest
   zod: latest

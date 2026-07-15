@@ -1,25 +1,24 @@
 {
-  "name": "@intellirepo/worker",
+  "name": "@intellirepo/testkit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -b",
-    "dev": "tsx watch src/main.ts",
     "lint": "eslint src",
-    "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
-    "@intellirepo/contracts": "workspace:*",
-    "@nestjs/common": "catalog:",
-    "@nestjs/core": "catalog:",
-    "bullmq": "catalog:",
-    "ioredis": "catalog:",
-    "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "@testcontainers/postgresql": "catalog:",
+    "testcontainers": "catalog:"
   },
   "devDependencies": {
     "@types/node": "latest"

@@ -6,6 +6,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html"],
     },
+    exclude: ["**/*.integration.test.ts", "**/node_modules/**", "**/.git/**"],
     include: ["**/src/**/*.test.ts"],
     passWithNoTests: true,
   },

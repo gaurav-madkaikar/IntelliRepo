@@ -1,0 +1,25 @@
+{
+  "name": "@intellirepo/repository",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@intellirepo/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "latest"
+  }
+}
