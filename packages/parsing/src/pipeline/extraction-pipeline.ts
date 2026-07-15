@@ -8,8 +8,14 @@ import type { LanguageExtractor } from "../interfaces/language-extractor.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { detectProject, inferArtifactLanguage } from "./project-detector.js";
 import { validateArtifactExtraction } from "./validation.js";
+import { linkConfigurationReferences } from "../configuration/configuration-linker.js";
+import { resolveCrossLanguageReferences } from "./cross-language-resolver.js";
 
-function emptyFailureResult(artifactPath: string, extractor: LanguageExtractor, error: unknown) {
+function emptyFailureResult(
+  artifactPath: string,
+  extractor: Pick<LanguageExtractor, "id">,
+  error: unknown,
+) {
   return Object.freeze({
     artifactPath,
     diagnostics: [
@@ -60,7 +66,26 @@ export class ExtractionPipeline {
       }
     }
 
-    let enriched: readonly ArtifactExtractionResult[] = artifacts;
+    for (const artifact of input.artifacts) {
+      const extractor = this.registry.artifactExtractorFor(artifact);
+      if (extractor === undefined) continue;
+      try {
+        artifacts.push(
+          validateArtifactExtraction(
+            await extractor.extract(artifact, { ...input, detection }),
+            input.revisionId,
+          ),
+        );
+      } catch (error) {
+        artifacts.push(emptyFailureResult(artifact.path, extractor, error));
+      }
+    }
+
+    let enriched: readonly ArtifactExtractionResult[] = linkConfigurationReferences(
+      resolveCrossLanguageReferences(artifacts, input.repositoryId, input.revisionId),
+      input.repositoryId,
+      input.revisionId,
+    );
     for (const adapter of this.registry.frameworkAdaptersFor(detection)) {
       enriched = await adapter.enrich({ ...input, detection }, enriched);
       enriched = enriched.map((result) => validateArtifactExtraction(result, input.revisionId));

@@ -1,11 +1,13 @@
 import type { SourceLanguage } from "@intellirepo/domain";
 
 import type { FrameworkAdapter } from "../interfaces/framework-adapter.js";
+import type { ArtifactExtractor } from "../interfaces/artifact-extractor.js";
 import type { LanguageExtractor } from "../interfaces/language-extractor.js";
 import type { ProjectDetection } from "../interfaces/extraction.js";
 
 export class AdapterRegistry {
   private readonly extractors = new Map<SourceLanguage, LanguageExtractor>();
+  private readonly artifactExtractors: ArtifactExtractor[] = [];
   private readonly adapters: FrameworkAdapter[] = [];
 
   public registerExtractor(extractor: LanguageExtractor): this {
@@ -22,6 +24,24 @@ export class AdapterRegistry {
     }
     this.adapters.push(adapter);
     return this;
+  }
+
+  public registerArtifactExtractor(extractor: ArtifactExtractor): this {
+    if (this.artifactExtractors.some(({ id }) => id === extractor.id)) {
+      throw new Error(`Artifact extractor ${extractor.id} is already registered`);
+    }
+    this.artifactExtractors.push(extractor);
+    return this;
+  }
+
+  public artifactExtractorFor(
+    artifact: Parameters<ArtifactExtractor["supports"]>[0],
+  ): ArtifactExtractor | undefined {
+    const matches = this.artifactExtractors.filter((extractor) => extractor.supports(artifact));
+    if (matches.length > 1) {
+      throw new Error(`Multiple artifact extractors support ${artifact.path}`);
+    }
+    return matches[0];
   }
 
   public extractorFor(language: SourceLanguage): LanguageExtractor | undefined {

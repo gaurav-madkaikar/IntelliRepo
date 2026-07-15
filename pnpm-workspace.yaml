@@ -28,6 +28,8 @@ catalog:
   reflect-metadata: latest
   rxjs: latest
   testcontainers: latest
+  tree-sitter-wasms: 0.1.13
   typescript: 6.0.3
   web-tree-sitter: 0.26.11
+  web-tree-sitter-legacy: npm:web-tree-sitter@0.25.10
   zod: latest

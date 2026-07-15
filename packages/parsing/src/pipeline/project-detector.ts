@@ -37,6 +37,29 @@ function packageDependencies(artifacts: readonly SourceArtifactInput[]): Readonl
   }
 }
 
+function jvmFrameworks(artifacts: readonly SourceArtifactInput[]): readonly string[] {
+  const manifests = artifacts
+    .filter(({ path }) => /(^|\/)(?:pom\.xml|build\.gradle(?:\.kts)?)$/u.test(path))
+    .map(({ content }) => content)
+    .join("\n");
+  return [
+    ...(/org\.springframework|spring-boot/u.test(manifests) ? ["spring-boot"] : []),
+    ...(/\bio\.ktor\b/u.test(manifests) ? ["ktor"] : []),
+    ...(/\bio\.vertx\b/u.test(manifests) ? ["vertx"] : []),
+  ];
+}
+
+function sourceRoots(artifacts: readonly SourceArtifactInput[]): readonly string[] {
+  const roots = artifacts.flatMap(({ artifactKind, path }) => {
+    if (artifactKind !== "code" && artifactKind !== "test") return [];
+    const jvm = /^(.*?src\/(?:main|test)\/(?:java|kotlin))(?:\/|$)/u.exec(path)?.[1];
+    if (jvm !== undefined) return [jvm];
+    const node = /^(.*?src)(?:\/|$)/u.exec(path)?.[1];
+    return node === undefined ? [] : [node];
+  });
+  return [...new Set(roots)].sort();
+}
+
 export function inferArtifactLanguage(artifact: SourceArtifactInput): SourceLanguage | undefined {
   return artifact.language ?? languageByExtension[extension(artifact.path)];
 }
@@ -44,6 +67,7 @@ export function inferArtifactLanguage(artifact: SourceArtifactInput): SourceLang
 export function detectProject(artifacts: readonly SourceArtifactInput[]): ProjectDetection {
   const languages = new Set<SourceLanguage>();
   for (const artifact of artifacts) {
+    if (artifact.artifactKind !== "code" && artifact.artifactKind !== "test") continue;
     const language = inferArtifactLanguage(artifact);
     if (language !== undefined && language !== "unknown") {
       languages.add(language);
@@ -52,16 +76,23 @@ export function detectProject(artifacts: readonly SourceArtifactInput[]): Projec
 
   const dependencies = packageDependencies(artifacts);
   const frameworks = [
+    ...jvmFrameworks(artifacts),
     ...(dependencies.has("@nestjs/core") ? ["nestjs"] : []),
     ...(dependencies.has("express") ? ["express"] : []),
   ];
   const configPaths = artifacts
     .map(({ path }) => path)
-    .filter((path) => /(^|\/)tsconfig(?:\.[^/]+)?\.json$/u.test(path));
+    .filter((path) =>
+      /(^|\/)(?:\.env\.example|application\.(?:properties|ya?ml)|bootstrap\.ya?ml|pom\.xml|(?:build|settings)\.gradle(?:\.kts)?|package\.json|tsconfig(?:\.[^/]+)?\.json)$/u.test(
+        path,
+      ),
+    )
+    .sort();
 
   return Object.freeze({
     configPaths: Object.freeze(configPaths.sort()),
-    frameworks: Object.freeze(frameworks),
+    frameworks: Object.freeze([...new Set(frameworks)].sort()),
     languages: Object.freeze([...languages].sort()),
+    sourceRoots: Object.freeze(sourceRoots(artifacts)),
   });
 }

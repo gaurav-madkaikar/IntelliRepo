@@ -19,8 +19,10 @@
   "dependencies": {
     "@intellirepo/domain": "workspace:*",
     "@vscode/tree-sitter-wasm": "catalog:",
+    "tree-sitter-wasms": "catalog:",
     "typescript": "catalog:",
-    "web-tree-sitter": "catalog:"
+    "web-tree-sitter": "catalog:",
+    "web-tree-sitter-legacy": "catalog:"
   },
   "devDependencies": {
     "@types/node": "latest"

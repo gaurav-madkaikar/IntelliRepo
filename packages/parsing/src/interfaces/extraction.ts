@@ -26,7 +26,7 @@ export interface ProjectExtractionInput {
 export interface UnresolvedReference {
   readonly artifactPath: string;
   readonly candidateEntityKeys: readonly EntityStableKey[];
-  readonly kind: "call" | "heritage" | "import";
+  readonly kind: "call" | "configuration" | "heritage" | "import";
   readonly name: string;
   readonly range: SourceRange;
   readonly sourceEntityKey: EntityStableKey;
@@ -45,6 +45,7 @@ export interface ProjectDetection {
   readonly configPaths: readonly string[];
   readonly frameworks: readonly string[];
   readonly languages: readonly SourceLanguage[];
+  readonly sourceRoots: readonly string[];
 }
 
 export interface ProjectExtractionResult {

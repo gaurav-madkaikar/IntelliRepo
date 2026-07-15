@@ -51,12 +51,18 @@ catalogs:
     testcontainers:
       specifier: latest
       version: 12.0.4
+    tree-sitter-wasms:
+      specifier: 0.1.13
+      version: 0.1.13
     typescript:
       specifier: 6.0.3
       version: 6.0.3
     web-tree-sitter:
       specifier: 0.26.11
       version: 0.26.11
+    web-tree-sitter-legacy:
+      specifier: npm:web-tree-sitter@0.25.10
+      version: 0.25.10
     zod:
       specifier: latest
       version: 4.4.3
@@ -220,12 +226,18 @@ importers:
       '@vscode/tree-sitter-wasm':
         specifier: 'catalog:'
         version: 0.3.1
+      tree-sitter-wasms:
+        specifier: 'catalog:'
+        version: 0.1.13
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
       web-tree-sitter:
         specifier: 'catalog:'
         version: 0.26.11
+      web-tree-sitter-legacy:
+        specifier: 'catalog:'
+        version: web-tree-sitter@0.25.10
     devDependencies:
       '@types/node':
         specifier: latest
@@ -2469,6 +2481,9 @@ packages:
     resolution: {integrity: sha512-dRXchy+C0IgK8WPC6xvCHFRIWYUbqqdEIKPaKo/AcTUNzwLTK6AH7RjdLWsEZcAN/TBdtfUw3PYEgPr5VPr6ww==}
     engines: {node: '>=14.16'}
 
+  tree-sitter-wasms@0.1.13:
+    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
     engines: {node: '>=18.12'}
@@ -2631,6 +2646,14 @@ packages:
       happy-dom:
         optional: true
       jsdom:
+        optional: true
+
+  web-tree-sitter@0.25.10:
+    resolution: {integrity: sha512-Y09sF44/13XvgVKgO2cNDw5rGk6s26MgoZPXLESvMXeefBf7i6/73eFurre0IsTW6E14Y0ArIzhUMmjoc7xyzA==}
+    peerDependencies:
+      '@types/emscripten': ^1.40.0
+    peerDependenciesMeta:
+      '@types/emscripten':
         optional: true
 
   web-tree-sitter@0.26.11:
@@ -4851,6 +4874,8 @@ snapshots:
       '@tokenizer/token': 0.3.0
       ieee754: 1.2.1
 
+  tree-sitter-wasms@0.1.13: {}
+
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
       typescript: 6.0.3
@@ -4967,6 +4992,8 @@ snapshots:
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
     transitivePeerDependencies:
       - msw
+
+  web-tree-sitter@0.25.10: {}
 
   web-tree-sitter@0.26.11: {}
 

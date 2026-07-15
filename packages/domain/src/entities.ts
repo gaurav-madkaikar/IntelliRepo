@@ -13,6 +13,9 @@ export const ENTITY_KINDS = [
   "class",
   "interface",
   "object",
+  "field",
+  "constructor",
+  "annotation",
   "function",
   "method",
   "endpoint",
@@ -42,6 +45,11 @@ export interface EntityAttributesByKind {
   readonly class: SymbolAttributes & {
     readonly declarationKind?: "class" | "enum" | "record";
   };
+  readonly annotation: {
+    readonly arguments?: string;
+    readonly annotationName: string;
+  };
+  readonly constructor: SymbolAttributes;
   readonly configuration_key: {
     readonly defaultValue?: string;
     readonly key: string;
@@ -72,6 +80,9 @@ export interface EntityAttributesByKind {
   readonly file: {
     readonly artifactKind: "build" | "code" | "configuration" | "documentation" | "test";
     readonly path: string;
+  };
+  readonly field: SymbolAttributes & {
+    readonly type?: string;
   };
   readonly function: SymbolAttributes;
   readonly interface: SymbolAttributes;
