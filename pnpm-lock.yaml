@@ -18,6 +18,9 @@ catalogs:
     '@testcontainers/postgresql':
       specifier: latest
       version: 12.0.4
+    '@vscode/tree-sitter-wasm':
+      specifier: 0.3.1
+      version: 0.3.1
     bullmq:
       specifier: latest
       version: 5.80.2
@@ -48,6 +51,12 @@ catalogs:
     testcontainers:
       specifier: latest
       version: 12.0.4
+    typescript:
+      specifier: 6.0.3
+      version: 6.0.3
+    web-tree-sitter:
+      specifier: 0.26.11
+      version: 0.26.11
     zod:
       specifier: latest
       version: 4.4.3
@@ -198,6 +207,25 @@ importers:
         version: 26.1.1
 
   packages/domain:
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.1.1
+
+  packages/parsing:
+    dependencies:
+      '@intellirepo/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@vscode/tree-sitter-wasm':
+        specifier: 'catalog:'
+        version: 0.3.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      web-tree-sitter:
+        specifier: 'catalog:'
+        version: 0.26.11
     devDependencies:
       '@types/node':
         specifier: latest
@@ -1128,6 +1156,9 @@ packages:
 
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
+
+  '@vscode/tree-sitter-wasm@0.3.1':
+    resolution: {integrity: sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==}
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -2602,6 +2633,9 @@ packages:
       jsdom:
         optional: true
 
+  web-tree-sitter@0.26.11:
+    resolution: {integrity: sha512-Q5Dm3YTIXSXuH6FxX6RuzX2Qwpc4DPGiYMU87Wg5Z8OIStiQFiUex4zMDc0vBTw78EphaYJacncJghCHzbZptg==}
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -3390,6 +3424,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.10
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@vscode/tree-sitter-wasm@0.3.1': {}
 
   abort-controller@3.0.0:
     dependencies:
@@ -4931,6 +4967,8 @@ snapshots:
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
     transitivePeerDependencies:
       - msw
+
+  web-tree-sitter@0.26.11: {}
 
   which@2.0.2:
     dependencies:

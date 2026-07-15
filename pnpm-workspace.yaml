@@ -17,6 +17,7 @@ catalog:
   "@nestjs/core": latest
   "@nestjs/platform-express": latest
   "@testcontainers/postgresql": latest
+  "@vscode/tree-sitter-wasm": 0.3.1
   bullmq: latest
   ioredis: 5.10.1
   kysely: latest
@@ -27,4 +28,6 @@ catalog:
   reflect-metadata: latest
   rxjs: latest
   testcontainers: latest
+  typescript: 6.0.3
+  web-tree-sitter: 0.26.11
   zod: latest

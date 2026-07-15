@@ -1,0 +1,31 @@
+{
+  "entityKinds": [
+    "class",
+    "environment_variable",
+    "function",
+    "interface",
+    "method",
+    "module",
+    "test"
+  ],
+  "relationshipKinds": [
+    "CALLS",
+    "DECLARES",
+    "EXTENDS",
+    "IMPLEMENTS",
+    "IMPORTS",
+    "READS_CONFIG",
+    "TESTS"
+  ],
+  "requiredNames": [
+    "BaseService",
+    "Runner",
+    "USER_ID",
+    "UserService",
+    "greet",
+    "load",
+    "loads a user",
+    "main",
+    "run"
+  ]
+}

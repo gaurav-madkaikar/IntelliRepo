@@ -1,0 +1,22 @@
+export interface Runner {
+  run(): Promise<string>;
+}
+
+export class BaseService {}
+
+export class UserService extends BaseService implements Runner {
+  greet(id: number): string;
+  greet(id: string): string;
+  greet(id: number | string): string {
+    return String(id);
+  }
+
+  async run(): Promise<string> {
+    return this.greet(process.env.USER_ID ?? "anonymous");
+  }
+}
+
+export async function load(): Promise<string> {
+  const service = new UserService();
+  return await service.run();
+}

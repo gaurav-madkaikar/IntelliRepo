@@ -6,6 +6,7 @@
     { "path": "./packages/testkit" },
     { "path": "./packages/catalog" },
     { "path": "./packages/repository" },
+    { "path": "./packages/parsing" },
     { "path": "./apps/api" },
     { "path": "./apps/worker" },
     { "path": "./apps/web" }

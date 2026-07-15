@@ -1,0 +1,5 @@
+import { load } from "./service";
+
+test("loads a user", async () => {
+  await load();
+});

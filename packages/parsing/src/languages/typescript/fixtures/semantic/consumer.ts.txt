@@ -1,0 +1,6 @@
+import { load as execute } from "./service";
+export { UserService as Service } from "./service";
+
+export async function main(): Promise<string> {
+  return await execute();
+}
