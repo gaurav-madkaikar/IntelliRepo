@@ -180,17 +180,79 @@ export interface RiskFactorTable {
   weight: number;
 }
 
+export interface DocumentPageTable {
+  attributes: JsonObject;
+  id: string;
+  path: string;
+  repository_id: string;
+  revision_id: string;
+  title: string | null;
+}
+
+export interface DocumentSectionTable {
+  heading: string;
+  id: string;
+  level: number;
+  line_end: number;
+  line_start: number;
+  page_id: string;
+  stable_key: string;
+}
+
+export interface DocumentClaimTable {
+  claim_kind: string;
+  confidence_score: number;
+  id: string;
+  payload: JsonObject;
+  section_id: string;
+  source_text: string;
+}
+
+export interface DocumentationFindingTable {
+  claim_id: string | null;
+  created_at: Timestamp;
+  evidence: JsonObject;
+  finding_kind: string;
+  id: string;
+  repository_id: string;
+  revision_id: string;
+  severity: string;
+  status: string;
+}
+
+export interface DocumentationReviewTable {
+  applied_at: NullableTimestamp;
+  created_at: Timestamp;
+  diff: string;
+  finding_id: string | null;
+  id: string;
+  proposed_markdown: string;
+  repository_id: string;
+  revision_id: string;
+  state: string;
+}
+
+export interface DocumentationHealthTable {
+  calculated_at: Timestamp;
+  explanation: string;
+  metrics: JsonObject;
+  repository_id: string;
+  revision_id: string;
+  score: number;
+}
+
 interface UnusedTable {
   id: string;
 }
 
 export interface CatalogDatabase {
   answer_references: UnusedTable;
-  document_claims: UnusedTable;
-  document_pages: UnusedTable;
-  document_sections: UnusedTable;
-  documentation_findings: UnusedTable;
-  documentation_reviews: UnusedTable;
+  document_claims: DocumentClaimTable;
+  document_pages: DocumentPageTable;
+  document_sections: DocumentSectionTable;
+  documentation_findings: DocumentationFindingTable;
+  documentation_health: DocumentationHealthTable;
+  documentation_reviews: DocumentationReviewTable;
   entities: EntityTable;
   fact_staging_runs: FactStagingRunTable;
   impact_reports: ImpactReportTable;

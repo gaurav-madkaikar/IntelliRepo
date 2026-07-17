@@ -9,6 +9,7 @@
     { "path": "./packages/parsing" },
     { "path": "./packages/graph" },
     { "path": "./packages/impact" },
+    { "path": "./packages/documentation" },
     { "path": "./apps/api" },
     { "path": "./apps/worker" },
     { "path": "./apps/web" }
