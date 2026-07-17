@@ -3,6 +3,14 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 const positiveInteger = z.coerce.number().int().positive();
+const environmentBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return value;
+}, z.boolean());
 
 const environmentSchema = z.object({
   API_PORT: positiveInteger.default(4100),
@@ -13,10 +21,12 @@ const environmentSchema = z.object({
   GRAPH_QUERY_MAX_DEPTH: positiveInteger.max(12).default(4),
   GRAPH_QUERY_MAX_NODES: positiveInteger.max(10_000).default(200),
   MAX_FILE_BYTES: positiveInteger.default(1_048_576),
+  NEO4J_ENABLED: environmentBoolean.default(false),
   NEO4J_PASSWORD: z.string().min(8).default("intellirepo-password"),
   NEO4J_URI: z.string().url().default("bolt://localhost:7687"),
   NEO4J_USERNAME: z.string().min(1).default("neo4j"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  OLLAMA_ENABLED: environmentBoolean.default(false),
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   OLLAMA_CHAT_MODEL: z.string().min(1).default("qwen2.5-coder:7b"),
   OLLAMA_CONCURRENCY: positiveInteger.max(16).default(1),
@@ -34,10 +44,12 @@ export interface ApplicationConfig {
   readonly graphQueryMaxDepth: number;
   readonly graphQueryMaxNodes: number;
   readonly maxFileBytes: number;
+  readonly neo4jEnabled: boolean;
   readonly neo4jPassword: string;
   readonly neo4jUri: string;
   readonly neo4jUsername: string;
   readonly nodeEnv: "development" | "test" | "production";
+  readonly ollamaEnabled: boolean;
   readonly ollamaBaseUrl: string;
   readonly ollamaChatModel: string;
   readonly ollamaConcurrency: number;
@@ -69,10 +81,12 @@ export function loadApplicationConfig(
     graphQueryMaxDepth: parsed.GRAPH_QUERY_MAX_DEPTH,
     graphQueryMaxNodes: parsed.GRAPH_QUERY_MAX_NODES,
     maxFileBytes: parsed.MAX_FILE_BYTES,
+    neo4jEnabled: parsed.NEO4J_ENABLED,
     neo4jPassword: parsed.NEO4J_PASSWORD,
     neo4jUri: parsed.NEO4J_URI,
     neo4jUsername: parsed.NEO4J_USERNAME,
     nodeEnv: parsed.NODE_ENV,
+    ollamaEnabled: parsed.OLLAMA_ENABLED,
     ollamaBaseUrl: parsed.OLLAMA_BASE_URL,
     ollamaChatModel: parsed.OLLAMA_CHAT_MODEL,
     ollamaConcurrency: parsed.OLLAMA_CONCURRENCY,

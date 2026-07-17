@@ -2,19 +2,23 @@
 
 **Design baseline:** `docs/superpowers/specs/2026-07-15-intellirepo-portfolio-vertical-slice-design.md`
 
+**Architecture revision:** 2026-07-16
+
 **Target:** Twelve-week solo build
 
-**Architecture:** TypeScript modular monolith with Next.js, NestJS, BullMQ workers, PostgreSQL/pgvector, Neo4j, Redis, and Ollama
+**Architecture:** TypeScript modular monolith with Next.js, NestJS, BullMQ workers, mandatory PostgreSQL/pgvector and Redis, plus optional Neo4j and Ollama adapters
 
 ## 1. Delivery rules
 
 1. Build one demonstrable vertical path at a time. A module is not complete until its interface, implementation, tests, diagnostics, and one caller work together.
-2. Keep PostgreSQL canonical. Neo4j and pgvector are projections that can be rebuilt from canonical records.
-3. Keep deterministic analysis authoritative. Ollama may summarize, explain, classify bounded input, or draft prose; it must not invent repository facts.
-4. Require provenance for every source-derived fact and confidence for every inferred relationship.
-5. Add a failing test or fixture expectation before implementing each extractor, resolver, rule, or recovery path.
-6. Preserve a usable local demo at the end of every week.
-7. Do not expand deferred scope unless a release acceptance criterion cannot be met without it.
+2. Keep PostgreSQL mandatory and canonical. Run pgvector in the same PostgreSQL service; do not introduce a separate vector database.
+3. Keep Neo4j optional and rebuildable behind the graph traversal interface. Deterministic features must fall back to canonical PostgreSQL relationships when Neo4j is disabled, unavailable, or stale.
+4. Keep deterministic analysis authoritative and operational without Ollama. Ollama may summarize, explain, classify bounded input, or draft prose; it must not invent repository facts.
+5. Embed only selected redacted source spans and documentation sections. Do not create embeddings for every entity or relationship.
+6. Require provenance for every source-derived fact and confidence for every inferred relationship.
+7. Add a failing test or fixture expectation before implementing each extractor, resolver, rule, or recovery path.
+8. Preserve a usable local demo at the end of every week.
+9. Do not expand deferred scope unless a release acceptance criterion cannot be met without it.
 
 ## 2. Planned technology choices
 
@@ -25,12 +29,12 @@ The bootstrap task must pin compatible versions in the lockfile. The plan intent
 - NestJS for API and standalone workers.
 - Next.js for the dashboard.
 - Kysely plus reviewed SQL migrations for PostgreSQL and pgvector.
-- `neo4j-driver` for graph projection and queries.
+- `neo4j-driver` only for the optional graph projection and traversal adapter.
 - BullMQ with Redis for durable jobs.
 - Zod schemas for module and job contracts.
 - Tree-sitter grammars for Java and Kotlin; TypeScript Compiler API for TypeScript; Tree-sitter fallback for incomplete TypeScript.
 - Vitest for unit and contract tests.
-- Testcontainers for PostgreSQL, Neo4j, and Redis integration tests.
+- Testcontainers for mandatory PostgreSQL/pgvector and Redis integration tests, plus an optional Neo4j equivalence suite.
 - Playwright for browser acceptance tests.
 - Ollama HTTP interfaces for generation and embeddings.
 - Octokit for optional GitHub pull request access.
@@ -85,8 +89,8 @@ The bootstrap task must pin compatible versions in the lockfile. The plan intent
 | `repository`    | Safe repository access, Git revisions/diffs, discovery inputs                      | Parsing or graph semantics     |
 | `parsing`       | Language parsing, framework adapters, normalization, symbol-resolution diagnostics | Direct database writes         |
 | `catalog`       | Canonical facts, revisions, jobs, docs, claims, outbox transactions                | Graph traversal or model prose |
-| `graph`         | Neo4j projection, projection state, allowlisted traversals                         | Canonical truth                |
-| `embeddings`    | Chunk selection, redaction, embedding projection, semantic retrieval               | Structural conclusions         |
+| `graph`         | Traversal interface, PostgreSQL adapter, optional Neo4j projection/adapter/state   | Canonical truth                |
+| `embeddings`    | Selective source/doc chunks, redaction, pgvector projection, semantic retrieval    | Structural conclusions         |
 | `impact`        | Semantic diff, affected subgraph, test ranking, documentation impact, risk         | AST parsing or UI formatting   |
 | `documentation` | Markdown claims, deterministic stale/gap rules, generation plans, review diffs     | Automatic merge                |
 | `qa`            | Intent routing, evidence packs, answer validation                                  | Unrestricted Cypher            |
@@ -105,10 +109,10 @@ The first migration set should establish these logical records. Column details m
 - `fact_staging_runs`: staged extraction result before activation.
 - `scan_jobs` and `job_attempts`: state machine, stage, error, retry, timing.
 - `outbox_events`: idempotent projection and downstream-analysis events.
-- `projection_states`: repository/revision state for Neo4j and embeddings.
+- `projection_states`: repository/revision, lag, availability, and degraded state for optional Neo4j and semantic projections.
 - `document_pages`, `document_sections`, and `document_claims`.
 - `documentation_findings` and `documentation_reviews`.
-- `semantic_chunks`: source identity, checksum, redacted content, embedding.
+- `semantic_chunks`: eligible source/doc identity, checksum, redacted content, embedding, and chunk-selection reason.
 - `impact_reports`, `test_recommendations`, and `risk_factors`.
 - `question_sessions`, `questions`, and validated answer references.
 
@@ -155,15 +159,15 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 **Implement**
 
-- PostgreSQL with pgvector, Neo4j, Redis, and optional Ollama profile.
+- Mandatory PostgreSQL with pgvector and Redis, with Neo4j and Ollama as independent optional profiles.
 - Validated configuration for connection URLs, repository allowlist roots, file limits, model names, timeouts, and concurrency.
-- A root `doctor` command that verifies dependencies and reports degraded Ollama operation separately.
+- A root `doctor` command that verifies mandatory dependencies and reports Neo4j projection status and degraded Ollama operation separately.
 
 **Verify**
 
 - Compose reaches healthy state from clean volumes.
 - The API and worker report each dependency independently.
-- Structural features can start when Ollama is unavailable.
+- Structural and deterministic features start with PostgreSQL/Redis only; missing Neo4j or Ollama is reported without failing startup.
 
 **Checkpoint commit:** `chore: add local development services`
 
@@ -258,15 +262,16 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 **Implement**
 
-- BullMQ flow for discovery, parsing, resolution, commit, graph projection, embedding, and analysis.
+- BullMQ flow for discovery, parsing, resolution, commit, optional graph projection, optional embedding, and deterministic analysis.
 - Deterministic job IDs based on repository and revision.
 - Stage timing, retry metadata, cancellation checks, and structured failure records.
 
 **Verify**
 
 - Retried jobs resume safely and do not duplicate facts.
-- An Ollama outage does not fail structural indexing.
-- A projection failure leaves a visible delayed projection state.
+- An Ollama outage does not fail structural indexing or deterministic analysis.
+- A disabled or failed Neo4j projection falls back to PostgreSQL traversal and leaves a visible disabled/delayed projection state.
+- A skipped or failed semantic projection reports the unavailable capabilities without invalidating the canonical scan.
 
 **Checkpoint commit:** `feat(worker): orchestrate idempotent indexing jobs`
 
@@ -431,7 +436,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 **Checkpoint commit:** `feat(parsing): discover Ktor Vert.x and Express routes`
 
-### Week 6 — Incremental facts and graph projection
+### Week 6 — Incremental facts and traversal projections
 
 #### Task 6.1: Complete transactional incremental indexing
 
@@ -456,27 +461,32 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 **Checkpoint commit:** `feat(indexing): replace changed artifact facts transactionally`
 
-#### Task 6.2: Build the Neo4j projection
+#### Task 6.2: Build the graph traversal seam and optional Neo4j projection
 
 **Create**
 
-- `packages/graph/src/projector.ts`
-- `packages/graph/src/schema.ts`
-- `packages/graph/src/neighborhood-query.ts`
-- `packages/graph/src/projection-rebuilder.ts`
+- `packages/graph/src/traversal.ts`
+- `packages/graph/src/postgres/postgres-traversal.ts`
+- `packages/graph/src/neo4j/projector.ts`
+- `packages/graph/src/neo4j/schema.ts`
+- `packages/graph/src/neo4j/neo4j-traversal.ts`
+- `packages/graph/src/neo4j/projection-rebuilder.ts`
+- shared traversal contract and adapter-equivalence fixtures
 
 **Implement**
 
-- Repository-scoped node and relationship keys.
-- Idempotent upsert/delete projection from outbox events.
-- Projection revision markers and rebuild command.
-- Bounded neighborhood queries with relationship filters, depth, and node limits.
+- One bounded traversal interface for neighborhood, endpoint-flow, and affected-subgraph query shapes.
+- Mandatory PostgreSQL traversal over canonical repository-scoped relationships.
+- Optional Neo4j repository-scoped node/relationship projection with idempotent upsert/delete from outbox events.
+- Projection revision markers, lag calculation, rebuild command, and adapter selection/fallback.
+- Relationship filters, depth, node limits, and identical truncation metadata across adapters.
 
 **Verify**
 
-- Replaying events produces an identical graph.
-- Rebuilding matches incremental projection for the same canonical facts.
-- Queries cannot cross repositories.
+- PostgreSQL traversal works when Neo4j is not configured.
+- Replaying events produces an identical optional Neo4j graph, and rebuilding matches incremental projection for the same canonical facts.
+- Both adapters return equivalent entity/relationship sets and truncation metadata for shared fixtures.
+- Queries cannot cross repositories, and a stale Neo4j revision automatically selects PostgreSQL.
 - High-degree fixtures obey limits and return truncation metadata.
 
 **Checkpoint commit:** `feat(graph): project and query repository facts`
@@ -597,12 +607,12 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 - Offline mode produces useful fact-only Markdown.
 - Model output cannot remove required references or generated markers.
-- Mermaid diagrams contain only graph-supported relationships.
+- Mermaid diagrams contain only canonical relationships.
 - Applying an accepted review yields the previewed Git diff exactly.
 
 **Checkpoint commit:** `feat(documentation): generate traceable reviewable docs`
 
-### Week 9 — Embeddings, Ollama, and grounded Q&A
+### Week 9 — Selective embeddings, optional Ollama, and grounded Q&A
 
 #### Task 9.1: Implement safe semantic projection
 
@@ -615,7 +625,8 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 **Implement**
 
-- Entity-aware chunks for code and Markdown.
+- Deterministic eligibility rules for redacted explanatory source spans and Markdown sections only.
+- Explicit exclusion of per-entity/per-relationship embeddings and low-value generated/build artifacts.
 - Secret-like value redaction before persistence or Ollama calls.
 - Checksum-based incremental embedding updates.
 - Repository-scoped pgvector search with source metadata.
@@ -623,6 +634,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 **Verify**
 
 - Changed chunks update while unchanged chunks retain embeddings.
+- Each stored chunk records why it was eligible, and ineligible entities create no embedding work.
 - Secret fixtures never reach the fake embedding adapter.
 - Results cannot cross repository scope.
 
@@ -642,10 +654,10 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 **Implement**
 
 - Configurable model, timeout, concurrency, retry-once, and schema validation.
-- Supported structural intents mapped to allowlisted graph queries.
+- Supported structural intents mapped to allowlisted traversal-interface queries.
 - Hybrid evidence pack with graph paths, snippets, confidence, and references.
 - Citation validation and inference labels.
-- Explicit offline/degraded responses.
+- Deterministic structural evidence responses when Ollama is offline, with explicit degradation for prose generation or semantic-only questions.
 
 **Verify**
 
@@ -653,6 +665,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 - Prompt-injection text in repository content cannot change tool/query policy.
 - Invalid citations or unsupported claims are removed or labeled.
 - Optional Ollama smoke test validates one configured model without gating normal unit tests.
+- Structural intent tests pass with both traversal adapters and with no Ollama adapter.
 
 **Checkpoint commit:** `feat(qa): answer repository questions from validated evidence`
 
@@ -677,7 +690,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 **Verify**
 
 - DTOs reuse contract schemas rather than duplicating domain rules.
-- Invalid repository paths, stale revisions, and unavailable projections return actionable errors.
+- Invalid repository paths and stale canonical revisions return actionable errors; unavailable or stale optional projections return status plus the selected fallback adapter.
 - API tests prove repository isolation.
 
 **Checkpoint commit:** `feat(api): expose repository intelligence workflows`
@@ -697,6 +710,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 **Implement**
 
 - Repository selection, scan progress, health metrics, and failure retry.
+- Canonical revision plus Neo4j/semantic projection revision, lag, availability, selected traversal adapter, and Ollama degraded capabilities.
 - Entity search and bounded interactive graph.
 - Stale/gap filters, evidence panel, and suggested review.
 - Change/test/doc/risk report with explanations.
@@ -749,7 +763,7 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 **Implement**
 
 - Correlation IDs for repository, revision, scan, job, and question.
-- Per-stage timings, queue depth, parse counts, projection lag, and model latency.
+- Per-stage timings, queue depth, parse counts, per-projection revision/lag, selected traversal adapter, fallback count, embedding counts/skips, and model latency.
 - Parser concurrency/memory limits and batched database writes.
 - Index diagnostics explaining unsupported/skipped artifacts.
 
@@ -757,7 +771,8 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 
 - Initial structural index stays below five minutes on the defined benchmark machine and fixture.
 - Fewer than 20 changed files complete structural indexing below 30 seconds.
-- Bounded graph queries remain below two seconds and deterministic impact below ten seconds after projection.
+- Bounded PostgreSQL and Neo4j traversal queries remain below two seconds on the benchmark fixture, and deterministic impact remains below ten seconds from canonical facts.
+- Endpoint-flow and affected-subgraph benchmarks run against both adapters, assert equivalent bounded results, and record latency plus operational overhead without requiring Neo4j to win.
 - Path traversal, symlink escape, secret redaction, prompt injection, and cross-repository tests pass.
 
 **Checkpoint commit:** `perf: harden indexing and diagnostics`
@@ -800,24 +815,26 @@ Entity and relationship uniqueness must include repository identity. Artifact-ow
 1. Clean clone/install/build/typecheck/lint/unit tests.
 2. Clean Compose startup and migrations.
 3. All extractor contract and golden fixture tests.
-4. Integration tests for facts, projections, queue retries, and embeddings.
+4. Integration tests for canonical facts/PostgreSQL traversal, optional Neo4j projection equivalence, queue retries, and selective embeddings.
 5. Playwright primary portfolio walkthrough.
 6. Medium-repository performance run.
-7. Ollama-offline degraded-mode run.
-8. Optional GitHub mocked-contract suite.
-9. Secret, path, symlink, prompt-injection, and repository-isolation regression suite.
+7. PostgreSQL/Redis-only run with Neo4j and Ollama disabled.
+8. Full optional-projection run and PostgreSQL-versus-Neo4j traversal benchmark.
+9. Ollama-offline degraded-mode run.
+10. Optional GitHub mocked-contract suite.
+11. Secret, path, symlink, prompt-injection, and repository-isolation regression suite.
 
 **Release acceptance**
 
-- A repository can be registered and structurally indexed without Ollama.
+- A repository can be registered, structurally indexed, explored, and deterministically analyzed with PostgreSQL/Redis only.
 - All five framework fixtures meet the documented supported-pattern accuracy targets.
-- Graph entities are searchable and bounded relationships can be expanded.
-- Grounded Q&A cites valid repository sources and distinguishes inference.
+- Graph entities are searchable and bounded relationships can be expanded through PostgreSQL; enabling current Neo4j preserves equivalent results.
+- With Ollama enabled, grounded Q&A cites valid repository sources and distinguishes inference; without it, supported structural questions return cited deterministic evidence and visible degraded status.
 - A prepared change triggers incremental indexing rather than a full scan.
 - The impact report identifies affected APIs, tests, docs, and explainable risk.
 - At least one stale documentation claim and one documentation gap are detected deterministically.
 - A correction can be previewed and explicitly applied as the exact reviewed local diff.
-- Failures and degraded projections are visible and retryable.
+- Canonical freshness, optional projection lag/availability, selected traversal adapter, and degraded capabilities are visible; failed projections are retryable.
 - The complete portfolio narrative can be demonstrated from a documented clean setup.
 
 **Checkpoint commit:** `docs: prepare IntelliRepo portfolio release`
@@ -831,10 +848,12 @@ flowchart TD
     REPO --> LANG["Language extraction"]
     LANG --> FRAME["Framework adapters"]
     FRAME --> INCR["Incremental fact activation"]
-    INCR --> GRAPH["Neo4j projection"]
-    GRAPH --> IMPACT["Impact, tests, and risk"]
+    INCR --> TRAVERSAL["Traversal interface + PostgreSQL adapter"]
+    INCR -.-> NEO["Optional Neo4j projection/adapter"]
+    TRAVERSAL --> IMPACT["Impact, tests, and risk"]
+    NEO -.-> TRAVERSAL
     INCR --> DOCS["Documentation claims and generation"]
-    GRAPH --> QA["Hybrid Q&A"]
+    TRAVERSAL --> QA["Hybrid Q&A"]
     DOCS --> QA
     IMPACT --> API["Product API"]
     DOCS --> API
@@ -862,7 +881,8 @@ At the end of each week:
 | ------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Five framework adapters exceed Week 5       | Fixture coverage remains incomplete midway through Week 5  | Support explicit common patterns first; emit diagnostics for the rest; do not add heuristics without evidence                        |
 | Java/Kotlin call resolution is too shallow  | Impact reports contain many ambiguous callees              | Prioritize route-to-handler-to-injected-service flows and preserve tentative confidence for unresolved general calls                 |
-| Neo4j and PostgreSQL drift                  | Projection revision lags or rebuild differs                | Keep canonical facts in PostgreSQL; require replay/rebuild equivalence tests and visible projection state                            |
+| Neo4j and PostgreSQL drift                  | Projection revision lags or rebuild differs                | Fall back to canonical PostgreSQL traversal; require replay/rebuild equivalence tests and visible revision/lag state                 |
+| Neo4j complexity is not justified           | Representative queries show no material benefit            | Keep the adapter optional, publish the PostgreSQL/Neo4j benchmark, and recommend Neo4j only where observed trade-offs justify it     |
 | Ollama latency harms the demo               | Q&A and generation exceed presentation tolerance           | Preselect a documented local model, cap context, stream status, cache by evidence hash, and keep deterministic features fully usable |
 | Medium-repository indexing misses target    | Week 6 benchmark approaches five minutes before embeddings | Batch writes, bound concurrency, reuse parser projects, profile before adding AI work, and benchmark structural indexing separately  |
 | Stale-doc detection produces noisy findings | Fixture reviewers reject many findings                     | Restrict confirmed mismatches to structured claims; downgrade ambiguous prose to review candidates                                   |
@@ -874,7 +894,7 @@ At the end of each week:
 | Requested capability               | Primary delivery tasks         | MVP disposition                       |
 | ---------------------------------- | ------------------------------ | ------------------------------------- |
 | Repository intelligence            | 1.3, 3.1–5.2                   | Included                              |
-| Incremental knowledge graph        | 2.3, 6.1–6.2                   | Included                              |
+| Incremental knowledge graph        | 2.3, 6.1–6.2                   | Canonical PostgreSQL; optional Neo4j  |
 | Automated documentation            | 8.2                            | Included                              |
 | Stale documentation detection      | 8.1                            | Included                              |
 | Pull request impact analysis       | 7.1–7.3, 11.1                  | Included; one idempotent comment      |

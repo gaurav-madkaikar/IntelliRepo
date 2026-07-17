@@ -4,7 +4,7 @@ import { performance } from "node:perf_hooks";
 import type { ApplicationConfig } from "./config.js";
 
 export type DependencyName = "neo4j" | "ollama" | "postgres" | "redis";
-export type DependencyState = "down" | "up";
+export type DependencyState = "disabled" | "down" | "up";
 export type OverallHealthState = "degraded" | "healthy" | "unhealthy";
 
 export interface DependencyHealth {
@@ -123,6 +123,16 @@ async function runCheck(
   }
 }
 
+function disabledDependency(name: DependencyName): DependencyHealth {
+  return {
+    latencyMs: 0,
+    message: "Disabled by configuration",
+    name,
+    required: false,
+    state: "disabled",
+  };
+}
+
 export function summarizeHealth(
   dependencies: readonly DependencyHealth[],
   timestamp = new Date().toISOString(),
@@ -151,9 +161,13 @@ export async function checkInfrastructureHealth(
 ): Promise<InfrastructureHealth> {
   const dependencies = await Promise.all([
     runCheck("postgres", true, checkers.postgres),
-    runCheck("neo4j", true, checkers.neo4j),
+    config.neo4jEnabled
+      ? runCheck("neo4j", false, checkers.neo4j)
+      : Promise.resolve(disabledDependency("neo4j")),
     runCheck("redis", true, checkers.redis),
-    runCheck("ollama", false, checkers.ollama),
+    config.ollamaEnabled
+      ? runCheck("ollama", false, checkers.ollama)
+      : Promise.resolve(disabledDependency("ollama")),
   ]);
 
   return summarizeHealth(dependencies);

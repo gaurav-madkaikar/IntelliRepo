@@ -8,7 +8,7 @@ async function main(): Promise<void> {
     const requirement = dependency.required ? "required" : "optional";
     const detail = dependency.message === undefined ? "" : ` — ${dependency.message}`;
     process.stdout.write(
-      `${dependency.name.padEnd(8)} ${dependency.state.padEnd(4)} ${requirement} ${dependency.latencyMs}ms${detail}\n`,
+      `${dependency.name.padEnd(8)} ${dependency.state.padEnd(8)} ${requirement} ${dependency.latencyMs}ms${detail}\n`,
     );
   }
 

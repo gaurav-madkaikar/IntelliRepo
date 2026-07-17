@@ -4,6 +4,8 @@
 
 **Date:** 2026-07-15
 
+**Architecture revision:** 2026-07-16
+
 **Delivery target:** Twelve weeks, solo implementation
 
 **Primary mode:** Local-first, with optional GitHub pull request analysis
@@ -27,11 +29,11 @@ The release is successful when a clean local setup can index a medium repository
 - Repositories up to approximately 100,000 lines or 2,000 source files.
 - Local Git repositories and working-tree changes.
 - Optional GitHub pull request diff ingestion and one idempotent analysis comment.
-- Incremental fact replacement, graph projection, and affected-subgraph calculation.
+- Incremental fact replacement, canonical PostgreSQL traversal, optional graph projection, and affected-subgraph calculation.
 - API discovery, test recommendations, documentation impact, and explainable risk scoring.
 - Markdown generation, stale-claim detection, missing-documentation detection, and Mermaid diagrams.
 - Graph exploration, hybrid codebase Q&A, and a documentation-health dashboard.
-- Local inference and embeddings through Ollama.
+- Selective source/documentation embeddings and optional local inference through Ollama.
 - Docker Compose setup and versioned sample/fixture repositories.
 
 ### Deferred
@@ -54,21 +56,21 @@ The product is a TypeScript monorepo implemented as a modular monolith. It has t
 - A NestJS HTTP application.
 - A NestJS standalone worker for parsing, projection, analysis, embeddings, and generation.
 
-Docker Compose provides PostgreSQL with pgvector, Neo4j, Redis, and local application processes. Ollama may run on the host or as an optional Compose profile depending on platform support.
+Docker Compose requires PostgreSQL with the pgvector extension and Redis for the local application processes. Neo4j is an optional graph-query projection, not a required store. Ollama may run on the host or as an optional Compose profile. The canonical and deterministic product workflows must run when both optional dependencies are unavailable.
 
 ```mermaid
 flowchart LR
     UI["Next.js dashboard"] --> API["NestJS API"]
     API --> PG["PostgreSQL + pgvector"]
-    API --> NEO["Neo4j"]
+    API -. "optional traversal adapter" .-> NEO["Neo4j"]
     API --> REDIS["Redis / BullMQ"]
     REDIS --> WORKER["NestJS worker"]
     WORKER --> REPO["Local repository"]
     WORKER --> PARSERS["Language and framework adapters"]
-    WORKER --> OLLAMA["Ollama"]
+    WORKER -. "optional generation and embedding" .-> OLLAMA["Ollama"]
     PARSERS --> WORKER
     WORKER --> PG
-    WORKER --> NEO
+    WORKER -. "optional projection" .-> NEO
 ```
 
 ### Monorepo layout
@@ -83,9 +85,9 @@ packages/
   domain/              Canonical entities, relationships, confidence, provenance
   repository/          Local Git and optional GitHub adapters
   parsing/             Parsing pipeline and language/framework adapters
-  graph/               Neo4j persistence and affected-subgraph queries
+  graph/               Traversal interface, PostgreSQL adapter, and optional Neo4j projection
   catalog/             Repository, job, document, scan, and fact metadata
-  embeddings/          Chunking and pgvector semantic retrieval
+  embeddings/          Selective source/doc chunking and PostgreSQL pgvector retrieval
   impact/              Change, test, documentation, and risk analysis
   documentation/       Generation, claim extraction, and stale-doc detection
   qa/                  Graph-plus-vector retrieval and grounded answers
@@ -117,6 +119,8 @@ interface RepositoryQuestionAnswerer {
 }
 ```
 
+The graph module presents one bounded traversal interface to impact analysis, exploration, and Q&A. Its mandatory PostgreSQL adapter reads canonical relationships; its optional Neo4j adapter may accelerate the same query shapes without changing caller behavior or result semantics.
+
 Framework adapters consume syntax-tree and symbol information and emit normalized facts. They do not write to storage directly. Fact ownership, provenance, confidence, persistence, and graph projection remain centralized.
 
 ## 4. Canonical intelligence model
@@ -139,7 +143,7 @@ All source-derived entities and relationships record repository revision, file p
 
 ## 5. Indexing and projection flow
 
-PostgreSQL is the source of truth for extracted facts and operational state. Neo4j is a rebuildable, incrementally maintained query projection. pgvector is a rebuildable semantic projection.
+PostgreSQL is the mandatory source of truth for extracted facts and operational state. The pgvector extension runs inside that same PostgreSQL service; IntelliRepo does not require a separate vector database. Canonical relationships support a bounded PostgreSQL traversal adapter, so deterministic impact, test, documentation, risk, and exploration workflows do not depend on Neo4j. Neo4j is an optional, rebuildable, incrementally maintained traversal projection. Selective pgvector embeddings are a rebuildable semantic projection.
 
 ```mermaid
 flowchart TD
@@ -150,15 +154,18 @@ flowchart TD
     NORMALIZE["Normalize facts and provenance"]
     RESOLVE["Resolve cross-file relationships"]
     COMMIT["Transactionally replace owned facts"]
-    PROJECT["Update Neo4j projection"]
-    EMBED["Update semantic chunks and embeddings"]
+    SQLGRAPH["Query canonical relationships in PostgreSQL"]
+    PROJECT["Optionally update Neo4j projection"]
+    EMBED["Optionally update selected source/doc embeddings"]
     IMPACT["Compute affected subgraph"]
     OUTPUT["Refresh impact, docs, health, and Q&A"]
 
     DISCOVER --> DIFF --> PARSE --> EXTRACT --> NORMALIZE --> RESOLVE
     RESOLVE --> COMMIT
+    COMMIT --> SQLGRAPH
     COMMIT --> PROJECT
     COMMIT --> EMBED
+    SQLGRAPH --> IMPACT
     PROJECT --> IMPACT
     EMBED --> IMPACT
     IMPACT --> OUTPUT
@@ -166,9 +173,9 @@ flowchart TD
 
 The indexer detects added, modified, deleted, and renamed artifacts using Git metadata plus content hashes. Only changed artifacts are parsed. Cross-file resolution is recalculated for relationships whose source or target could be affected.
 
-Extracted facts are staged before one PostgreSQL transaction replaces the active facts owned by affected artifacts. A transactional outbox drives Neo4j and embedding projection. Jobs and projection writes are idempotent and revision-tagged. Impact analysis waits until required projections reach the fact revision.
+Extracted facts are staged before one PostgreSQL transaction replaces the active facts owned by affected artifacts. A transactional outbox drives optional Neo4j and semantic projections. Jobs and projection writes are idempotent and revision-tagged. Deterministic analysis reads the active canonical revision through the PostgreSQL traversal adapter and never waits for an optional projection. When Neo4j is enabled and current, the traversal interface may select it; when it is disabled, unavailable, or stale, the same request falls back to PostgreSQL.
 
-If a projection fails, canonical facts remain valid, the last completed projection remains queryable, and the dashboard reports the delayed revision. Retrying resumes from the failed stage without duplicating facts or relationships.
+If a projection fails, canonical facts remain valid and deterministic workflows continue. The last completed optional projection remains identifiable but must not be presented as current. The dashboard reports the canonical revision, each projection revision, lag, disabled/unavailable status, fallback adapter, and degraded capabilities. Retrying resumes from the failed stage without duplicating facts or relationships.
 
 ## 6. Parsing and framework adapters
 
@@ -213,7 +220,7 @@ docs/intellirepo/
   changes/<revision>.md
 ```
 
-Every generated page includes an AI-generated notice, indexed revision, confirmed facts, clearly marked inference, source references, and a machine-readable manifest of contributing entities. Mermaid diagrams are rendered from graph relationships, not invented by the language model.
+Every generated page includes an AI-generated notice, indexed revision, confirmed facts, clearly marked inference, source references, and a machine-readable manifest of contributing entities. Mermaid diagrams are rendered from canonical relationships, not invented by the language model or made dependent on Neo4j.
 
 Existing Markdown is parsed into sections and structured documentation claims. The MVP compares endpoint method/path, named entities, configuration keys and literal values, build/test commands, and code/document links with current facts.
 
@@ -252,19 +259,22 @@ The code explorer searches entities and requests bounded neighborhoods. Users ca
 Question answering uses hybrid retrieval:
 
 1. Classify the question into a supported structural intent.
-2. Execute allowlisted Neo4j query templates.
-3. Retrieve related source and documentation chunks through pgvector.
+2. Execute allowlisted traversal queries through the graph interface, using current Neo4j when available and PostgreSQL otherwise.
+3. Retrieve related selected source and documentation chunks through pgvector when the semantic projection is available.
 4. Build an evidence pack of facts, graph paths, snippets, confidence, and source references.
-5. Ask Ollama to answer only from that evidence.
-6. Validate citations and label any derived explanation as inference.
+5. Return deterministic structural evidence directly when Ollama is unavailable, or ask Ollama to explain only that evidence when it is available.
+6. Validate citations and label any derived explanation as inference; disclose unavailable semantic or model capabilities.
 
-Supported intents initially include entity lookup, callers, callees, endpoint flow, configuration usage, test impact, documentation impact, and module explanation. Unknown questions fall back to semantic retrieval and clearly disclose when graph evidence is unavailable. The model never generates unrestricted Cypher.
+Supported intents initially include entity lookup, callers, callees, endpoint flow, configuration usage, test impact, documentation impact, and module explanation. Unknown questions fall back to semantic retrieval when available and otherwise return an explicit unsupported/degraded response. The model never generates unrestricted Cypher or SQL.
+
+Embedding eligibility is deliberately narrow. The semantic projection includes redacted source spans useful for explanation and retrieval plus Markdown sections; it does not create one embedding per entity or relationship. Entity identity, relationships, confidence, and provenance remain structured canonical facts. Chunk-selection rules are deterministic, revision-aware, size-bounded, and observable.
 
 ## 10. Dashboard experience
 
 The Next.js dashboard provides:
 
 - Repository overview with revision, job health, entity counts, API counts, documentation health, and failures.
+- Separate canonical, Neo4j, semantic, and Ollama status with projection revision, lag, fallback adapter, and degraded capabilities.
 - Code explorer with entity search and bounded graph expansion.
 - Documentation health with stale claims, gaps, severity, evidence, and suggestions.
 - Change impact with semantic changes, affected entities, tests, documentation, risk, and review focus.
@@ -287,9 +297,9 @@ Index a sample repository
 
 ## 11. Reliability, privacy, and observability
 
-Indexing jobs transition through `QUEUED`, `DISCOVERING`, `PARSING`, `RESOLVING`, `COMMITTING_FACTS`, `PROJECTING_GRAPH`, `EMBEDDING`, `ANALYZING`, and `COMPLETED`. Failures retain their completed stage, diagnostics, revision, and retry metadata.
+Indexing jobs transition through `QUEUED`, `DISCOVERING`, `PARSING`, `RESOLVING`, `COMMITTING_FACTS`, optional `PROJECTING_GRAPH`, optional `EMBEDDING`, `ANALYZING`, and `COMPLETED`. A disabled optional stage is recorded as skipped; its failure records lag and degraded capabilities without invalidating the canonical revision. Failures retain their completed stage, diagnostics, revision, and retry metadata.
 
-Ollama is an optional local dependency. Structural indexing, route discovery, graph exploration, deterministic stale checks, and impact scoring remain available when it is offline. Documentation prose, suggested rewrites, semantic retrieval, and natural-language answers report a degraded state. Structured model output is schema-validated and retried once.
+Neo4j and Ollama are optional local dependencies. Structural indexing, route discovery, PostgreSQL-backed graph exploration, deterministic stale checks, test recommendations, impact scoring, fact-only documentation, and structural evidence responses remain available when they are offline. Documentation prose, suggested rewrites, semantic-only retrieval, and natural-language answers report a degraded state. Structured model output is schema-validated and retried once.
 
 Repository controls respect `.gitignore` and IntelliRepo exclusions, skip binaries/generated directories/oversized files, reject symlinks escaping the repository root, and avoid `.env` contents by default. Likely secret values are redacted before embeddings or prompts. Repository content remains local. GitHub credentials are accepted through runtime secrets and are never indexed.
 
@@ -299,8 +309,9 @@ Performance goals on a typical modern developer laptop are:
 
 - Initial structural indexing below five minutes for the target repository size.
 - Incremental structural indexing below 30 seconds for fewer than 20 changed files.
-- Bounded graph queries below two seconds.
-- Deterministic impact analysis below ten seconds after projections are current.
+- Bounded traversal queries below two seconds on the configured adapter.
+- Deterministic impact analysis below ten seconds from the canonical revision without requiring optional projections.
+- Endpoint-flow and affected-subgraph queries benchmarked on both PostgreSQL and Neo4j with equivalent bounded results; observed latency and operational trade-offs are recorded rather than assuming Neo4j is faster.
 - Ollama latency reported separately because it depends on model and hardware.
 
 ## 12. Verification
@@ -308,12 +319,13 @@ Performance goals on a typical modern developer laptop are:
 - Unit tests cover identifiers, normalization, confidence, claim comparison, traversal, ranking, and risk.
 - Extractor contract tests require every adapter to emit the canonical fact schema and valid provenance.
 - Golden fixtures cover supported patterns for all five framework adapters.
-- Integration tests cover PostgreSQL replacement, transactional outbox, Neo4j projection, pgvector retrieval, and BullMQ retries.
+- Integration tests cover PostgreSQL replacement and traversal, transactional outbox, optional Neo4j projection/equivalence, selective pgvector retrieval, and BullMQ retries.
 - End-to-end tests index a fixture, apply a prepared Git change, and verify that only changed artifacts are reparsed and affected outputs are refreshed.
 - Playwright tests cover the portfolio walkthrough and job recovery.
 - Performance tests detect accidental full re-indexing and validate the medium-repository target.
 - Recorded GitHub payloads and mocked API calls validate diff ingestion and idempotent comment updates.
 - Required AI assertions use a deterministic fake model; Ollama compatibility is covered by an optional smoke suite.
+- End-to-end acceptance runs once with PostgreSQL/Redis only and once with optional Neo4j/Ollama capabilities enabled.
 
 Release acceptance requires the complete demo to run from a clean documented setup with framework fixtures and a prepared incremental-change scenario.
 
@@ -324,10 +336,10 @@ Release acceptance requires the complete demo to run from a clean documented set
 | 1–2   | Monorepo, Compose services, canonical model, repository registration, project detection, and job lifecycle |
 | 3–4   | Java, Kotlin, and TypeScript extraction with normalized facts and provenance                               |
 | 5     | Five framework adapters with golden fixtures                                                               |
-| 6     | Canonical fact store, incremental replacement, Neo4j projection, and affected-subgraph queries             |
+| 6     | Canonical fact store, PostgreSQL traversal, optional Neo4j projection, and affected-subgraph queries       |
 | 7     | Semantic change diff, test recommendations, documentation impact, and risk scoring                         |
 | 8     | Markdown generation, claim extraction, stale/gap detection, and Mermaid output                             |
-| 9     | pgvector retrieval, Ollama integration, grounded Q&A, and degraded mode                                    |
+| 9     | Selective pgvector retrieval, optional Ollama integration, grounded Q&A, and degraded mode                 |
 | 10    | Six dashboard experiences and the integrated demo flow                                                     |
 | 11    | Local Git workflow, GitHub PR analysis, privacy controls, and performance tuning                           |
 | 12    | End-to-end hardening, demo fixtures, onboarding, screenshots, and release polish                           |
@@ -335,7 +347,10 @@ Release acceptance requires the complete demo to run from a clean documented set
 ## 14. Design decisions
 
 - A modular monolith is preferred over microservices because it preserves clean interfaces without spending the twelve-week schedule on distributed operations.
-- PostgreSQL owns canonical facts; Neo4j and pgvector are projections. This makes failure recovery and rebuilding explicit.
-- Deterministic extraction and comparison establish truth; local AI explains verified facts and improves prose.
+- PostgreSQL is mandatory and owns canonical facts. pgvector is an extension of that same store rather than a separate vector service.
+- The graph seam has a mandatory PostgreSQL traversal adapter and an optional Neo4j adapter. Neo4j remains rebuildable and cannot be required by deterministic features.
+- Deterministic extraction, traversal, comparison, impact, test, documentation-health, and risk features establish truth and remain usable without Ollama; local AI only explains verified facts and improves prose.
+- Embeddings are limited to useful redacted source spans and documentation sections; structured entities and relationships are not embedded by default.
+- Representative endpoint-flow and affected-subgraph traversals are benchmarked on both adapters before making any deployment recommendation.
 - Framework variation lives behind extraction adapters. The canonical model and persistence modules remain language-neutral.
 - The portfolio experience is one end-to-end change story, not three disconnected demonstrations.
