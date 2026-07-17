@@ -218,6 +218,19 @@ importers:
         specifier: latest
         version: 26.1.1
 
+  packages/graph:
+    dependencies:
+      '@intellirepo/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      kysely:
+        specifier: 'catalog:'
+        version: 0.29.3
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.1.1
+
   packages/parsing:
     dependencies:
       '@intellirepo/domain':

@@ -21,6 +21,8 @@ export interface ProjectExtractionInput {
   readonly artifacts: readonly SourceArtifactInput[];
   readonly repositoryId: string;
   readonly revisionId: string;
+  /** Optional incremental boundary; omitted for a full extraction. */
+  readonly selectedArtifactPaths?: readonly string[];
 }
 
 export interface UnresolvedReference {

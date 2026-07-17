@@ -33,6 +33,13 @@ export interface StageFactSetInput {
   readonly revisionId: string;
 }
 
+export interface ActivateRevisionFactsInput {
+  readonly deletedArtifactIds?: readonly string[];
+  readonly repositoryId: string;
+  readonly revisionId: string;
+  readonly stagingRunIds: readonly string[];
+}
+
 function toJsonRecords(value: unknown): readonly Record<string, unknown>[] {
   return JSON.parse(JSON.stringify(value)) as readonly Record<string, unknown>[];
 }
@@ -176,11 +183,6 @@ async function replaceRelationships(
   revisionId: string,
   relationships: readonly StoredRelationshipFact[],
 ): Promise<void> {
-  await transaction
-    .deleteFrom("relationships")
-    .where("owner_artifact_id", "=", artifactId)
-    .execute();
-
   const referencedKeys = [
     ...new Set(relationships.flatMap(({ source, target }) => [source, target])),
   ];
@@ -234,65 +236,193 @@ async function replaceRelationships(
   }
 }
 
+async function activateRevisionTransaction(
+  transaction: Transaction<CatalogDatabase>,
+  input: ActivateRevisionFactsInput,
+): Promise<void> {
+  const stagingRunIds = [...new Set(input.stagingRunIds)];
+  const deletedArtifactIds = [...new Set(input.deletedArtifactIds ?? [])];
+
+  if (stagingRunIds.length !== input.stagingRunIds.length) {
+    throw new Error("Revision activation cannot contain duplicate staging run ids");
+  }
+
+  const stagingRuns =
+    stagingRunIds.length === 0
+      ? []
+      : await transaction
+          .selectFrom("fact_staging_runs")
+          .selectAll()
+          .where("id", "in", stagingRunIds)
+          .forUpdate()
+          .execute();
+
+  if (stagingRuns.length !== stagingRunIds.length) {
+    throw new Error("Revision activation references an unknown staging run");
+  }
+  for (const stagingRun of stagingRuns) {
+    if (
+      stagingRun.repository_id !== input.repositoryId ||
+      stagingRun.revision_id !== input.revisionId
+    ) {
+      throw new Error("All staging runs must belong to the activated repository revision");
+    }
+  }
+
+  const statuses = new Set(stagingRuns.map(({ status }) => status));
+  if (statuses.size === 1 && statuses.has("active")) return;
+  if (stagingRuns.length === 0) {
+    const completed = await transaction
+      .selectFrom("outbox_events")
+      .select("id")
+      .where("idempotency_key", "=", `facts:${input.repositoryId}:${input.revisionId}`)
+      .executeTakeFirst();
+    if (completed !== undefined) return;
+  }
+  if (statuses.size > 1 || (statuses.size === 1 && !statuses.has("staged"))) {
+    throw new Error("Revision activation requires staging runs to share the staged status");
+  }
+
+  const changedArtifactIds = stagingRuns.map(({ artifact_id: artifactId }) => artifactId);
+  if (new Set(changedArtifactIds).size !== changedArtifactIds.length) {
+    throw new Error("Revision activation cannot stage the same artifact more than once");
+  }
+  const deletedArtifactSet = new Set(deletedArtifactIds);
+  if (changedArtifactIds.some((artifactId) => deletedArtifactSet.has(artifactId))) {
+    throw new Error("An artifact cannot be changed and deleted in the same activation");
+  }
+  const affectedArtifactIds = [...changedArtifactIds, ...deletedArtifactIds];
+  const affectedArtifacts =
+    affectedArtifactIds.length === 0
+      ? []
+      : await transaction
+          .selectFrom("source_artifacts")
+          .select(["id", "repository_id"])
+          .where("id", "in", affectedArtifactIds)
+          .forUpdate()
+          .execute();
+  if (
+    affectedArtifacts.length !== affectedArtifactIds.length ||
+    affectedArtifacts.some(({ repository_id: repositoryId }) => repositoryId !== input.repositoryId)
+  ) {
+    throw new Error("Every affected artifact must belong to the activated repository");
+  }
+
+  const revision = await transaction
+    .selectFrom("revisions")
+    .select(["id", "repository_id"])
+    .where("id", "=", input.revisionId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  if (revision.repository_id !== input.repositoryId) {
+    throw new Error("Revision does not belong to the activated repository");
+  }
+
+  if (affectedArtifactIds.length > 0) {
+    await transaction
+      .deleteFrom("provenance")
+      .where("artifact_id", "in", affectedArtifactIds)
+      .execute();
+    await transaction
+      .deleteFrom("relationships")
+      .where("owner_artifact_id", "in", affectedArtifactIds)
+      .execute();
+  }
+
+  if (deletedArtifactIds.length > 0) {
+    await transaction
+      .deleteFrom("source_artifacts")
+      .where("repository_id", "=", input.repositoryId)
+      .where("id", "in", deletedArtifactIds)
+      .execute();
+  }
+
+  // Insert every entity before resolving any edge. This makes relationship activation
+  // independent of changed-file order and permits cross-file references in one revision.
+  for (const stagingRun of stagingRuns) {
+    await replaceEntities(
+      transaction,
+      input.repositoryId,
+      stagingRun.artifact_id,
+      input.revisionId,
+      asStoredEntities(stagingRun.entities),
+    );
+  }
+  for (const stagingRun of stagingRuns) {
+    await replaceRelationships(
+      transaction,
+      input.repositoryId,
+      stagingRun.artifact_id,
+      input.revisionId,
+      asStoredRelationships(stagingRun.relationships),
+    );
+  }
+
+  if (changedArtifactIds.length > 0) {
+    await transaction
+      .updateTable("source_artifacts")
+      .set({ active_revision_id: input.revisionId, last_indexed_at: new Date() })
+      .where("repository_id", "=", input.repositoryId)
+      .where("id", "in", changedArtifactIds)
+      .execute();
+    await transaction
+      .updateTable("fact_staging_runs")
+      .set({ activated_at: new Date(), status: "active" })
+      .where("id", "in", stagingRunIds)
+      .execute();
+  }
+
+  await transaction
+    .updateTable("revisions")
+    .set({ status: "superseded" })
+    .where("repository_id", "=", input.repositoryId)
+    .where("id", "!=", input.revisionId)
+    .where("status", "=", "active")
+    .execute();
+  await transaction
+    .updateTable("revisions")
+    .set({ status: "active" })
+    .where("id", "=", input.revisionId)
+    .executeTakeFirstOrThrow();
+
+  await enqueueOutboxEvent(transaction, {
+    aggregateId: input.repositoryId,
+    eventType: "facts.revision-activated",
+    idempotencyKey: `facts:${input.repositoryId}:${input.revisionId}`,
+    payload: {
+      changedArtifactIds,
+      deletedArtifactIds,
+      repositoryId: input.repositoryId,
+      revisionId: input.revisionId,
+    },
+  });
+}
+
+/**
+ * Atomically swaps all facts affected by one repository revision. Unchanged artifacts and
+ * their facts are deliberately not updated, so incremental indexing retains their identity.
+ */
+export async function activateRevisionFacts(
+  database: Kysely<CatalogDatabase>,
+  input: ActivateRevisionFactsInput,
+): Promise<void> {
+  await database
+    .transaction()
+    .execute((transaction) => activateRevisionTransaction(transaction, input));
+}
+
 export async function activateFactSet(
   database: Kysely<CatalogDatabase>,
   stagingRunId: string,
 ): Promise<void> {
-  await database.transaction().execute(async (transaction) => {
-    const stagingRun = await transaction
-      .selectFrom("fact_staging_runs")
-      .selectAll()
-      .where("id", "=", stagingRunId)
-      .forUpdate()
-      .executeTakeFirstOrThrow();
-
-    if (stagingRun.status === "active") {
-      return;
-    }
-    if (stagingRun.status !== "staged") {
-      throw new Error(`Staging run ${stagingRunId} cannot be activated from ${stagingRun.status}`);
-    }
-
-    const entities = asStoredEntities(stagingRun.entities);
-    const relationships = asStoredRelationships(stagingRun.relationships);
-
-    await transaction
-      .deleteFrom("provenance")
-      .where("artifact_id", "=", stagingRun.artifact_id)
-      .execute();
-    await replaceEntities(
-      transaction,
-      stagingRun.repository_id,
-      stagingRun.artifact_id,
-      stagingRun.revision_id,
-      entities,
-    );
-    await replaceRelationships(
-      transaction,
-      stagingRun.repository_id,
-      stagingRun.artifact_id,
-      stagingRun.revision_id,
-      relationships,
-    );
-    await transaction
-      .updateTable("source_artifacts")
-      .set({ active_revision_id: stagingRun.revision_id, last_indexed_at: new Date() })
-      .where("id", "=", stagingRun.artifact_id)
-      .executeTakeFirstOrThrow();
-    await transaction
-      .updateTable("fact_staging_runs")
-      .set({ activated_at: new Date(), status: "active" })
-      .where("id", "=", stagingRunId)
-      .executeTakeFirstOrThrow();
-    await enqueueOutboxEvent(transaction, {
-      aggregateId: stagingRun.repository_id,
-      eventType: "facts.activated",
-      idempotencyKey: `facts:${stagingRun.repository_id}:${stagingRun.revision_id}:${stagingRun.artifact_id}`,
-      payload: {
-        artifactId: stagingRun.artifact_id,
-        repositoryId: stagingRun.repository_id,
-        revisionId: stagingRun.revision_id,
-      },
-    });
+  const stagingRun = await database
+    .selectFrom("fact_staging_runs")
+    .select(["repository_id", "revision_id"])
+    .where("id", "=", stagingRunId)
+    .executeTakeFirstOrThrow();
+  await activateRevisionFacts(database, {
+    repositoryId: stagingRun.repository_id,
+    revisionId: stagingRun.revision_id,
+    stagingRunIds: [stagingRunId],
   });
 }

@@ -100,8 +100,16 @@ export function resolveCrossLanguageReferences(
   results: readonly ArtifactExtractionResult[],
   repositoryId: string,
   revisionId: string,
+  contextEntities: readonly EntityFact[] = [],
 ): readonly ArtifactExtractionResult[] {
-  const entities = results.flatMap(({ entities: values }) => values);
+  const entities = [
+    ...new Map(
+      [...contextEntities, ...results.flatMap(({ entities: values }) => values)].map((entity) => [
+        entity.stableKey,
+        entity,
+      ]),
+    ).values(),
+  ];
   const entityByKey = new Map(entities.map((entity) => [entity.stableKey, entity]));
   return results.map((result) => {
     const resolved = new Set<UnresolvedReference>();

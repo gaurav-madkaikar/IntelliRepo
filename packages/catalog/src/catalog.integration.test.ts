@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ArtifactCatalog } from "./artifact-catalog.js";
 import { createCatalogDatabase, migrateCatalogDown, migrateCatalogToLatest } from "./database.js";
 import type { CatalogDatabaseHandle } from "./database.js";
-import { activateFactSet, stageFactSet } from "./fact-activation.js";
+import { activateFactSet, activateRevisionFacts, stageFactSet } from "./fact-activation.js";
 import { enqueueOutboxEvent } from "./outbox.js";
 import { ProjectionStateCatalog } from "./projection-state-catalog.js";
 import { RepositoryCatalog } from "./repository-catalog.js";
@@ -162,6 +162,177 @@ describeWithDocker("catalog integration", () => {
       .where("repository_id", "=", seed.repositoryId)
       .execute();
     expect(retained).toEqual([{ stable_key: existingEntity.stableKey }]);
+  });
+
+  it("activates cross-artifact relationships in one revision and preserves unchanged facts", async () => {
+    const seed = await seedCatalog("revision-activation");
+    const secondArtifactId = "artifact-revision-activation-service";
+    await new ArtifactCatalog(handle.database).upsert({
+      artifactKind: "code",
+      contentHash: "hash-service",
+      id: secondArtifactId,
+      language: "java",
+      path: "src/Service.java",
+      repositoryId: seed.repositoryId,
+      sizeBytes: 84,
+    });
+    const caller = entityFact(seed.repositoryId, seed.revisionId);
+    const target = {
+      ...entityFact(seed.repositoryId, seed.revisionId),
+      language: "java" as const,
+      name: "serve",
+      qualifiedName: "src.Service.serve",
+      stableKey: createEntityStableKey({
+        kind: "function",
+        language: "java",
+        qualifiedName: "src.Service.serve",
+        repositoryId: seed.repositoryId,
+      }),
+    };
+    const relationship = {
+      attributes: { resolution: "symbol" },
+      kind: "CALLS",
+      provenance: caller.provenance,
+      source: caller.stableKey,
+      target: target.stableKey,
+    } satisfies RelationshipFact;
+    const callerStage = await stageFactSet(handle.database, {
+      ...seed,
+      entities: [caller],
+      id: "stage-revision-caller",
+      relationships: [relationship],
+    });
+    const targetStage = await stageFactSet(handle.database, {
+      artifactId: secondArtifactId,
+      entities: [target],
+      id: "stage-revision-target",
+      relationships: [],
+      repositoryId: seed.repositoryId,
+      revisionId: seed.revisionId,
+    });
+
+    await activateRevisionFacts(handle.database, {
+      repositoryId: seed.repositoryId,
+      revisionId: seed.revisionId,
+      // Deliberately stage the caller first: entity insertion must make order irrelevant.
+      stagingRunIds: [callerStage, targetStage],
+    });
+
+    const storedRelationships = await handle.database
+      .selectFrom("relationships")
+      .select("kind")
+      .where("repository_id", "=", seed.repositoryId)
+      .execute();
+    expect(storedRelationships).toEqual([{ kind: "CALLS" }]);
+  });
+
+  it("applies rename and deletion changes without rewriting unchanged artifacts", async () => {
+    const seed = await seedCatalog("rename-delete");
+    const unchangedArtifactId = "artifact-rename-delete-unchanged";
+    await new ArtifactCatalog(handle.database).upsert({
+      artifactKind: "code",
+      contentHash: "unchanged-hash",
+      id: unchangedArtifactId,
+      language: "typescript",
+      path: "src/unchanged.ts",
+      repositoryId: seed.repositoryId,
+      sizeBytes: 20,
+    });
+    const original = entityFact(seed.repositoryId, seed.revisionId);
+    const unchanged = {
+      ...original,
+      name: "unchanged",
+      qualifiedName: "src/unchanged.unchanged",
+      stableKey: createEntityStableKey({
+        kind: "function",
+        language: "typescript",
+        qualifiedName: "src/unchanged.unchanged",
+        repositoryId: seed.repositoryId,
+      }),
+    };
+    const originalStage = await stageFactSet(handle.database, {
+      ...seed,
+      entities: [original],
+      id: "stage-rename-delete-original",
+      relationships: [],
+    });
+    const unchangedStage = await stageFactSet(handle.database, {
+      artifactId: unchangedArtifactId,
+      entities: [unchanged],
+      id: "stage-rename-delete-unchanged",
+      relationships: [],
+      repositoryId: seed.repositoryId,
+      revisionId: seed.revisionId,
+    });
+    await activateRevisionFacts(handle.database, {
+      repositoryId: seed.repositoryId,
+      revisionId: seed.revisionId,
+      stagingRunIds: [originalStage, unchangedStage],
+    });
+    const unchangedBefore = await handle.database
+      .selectFrom("entities")
+      .select(["id", "last_seen_revision_id"])
+      .where("stable_key", "=", unchanged.stableKey)
+      .executeTakeFirstOrThrow();
+
+    const nextRevisionId = "revision-rename-delete-next";
+    await new RevisionCatalog(handle.database).create({
+      commitSha: "commit-rename-delete-next",
+      id: nextRevisionId,
+      parentRevisionId: seed.revisionId,
+      repositoryId: seed.repositoryId,
+      worktreeFingerprint: "clean-next",
+    });
+    const renamedArtifactId = "artifact-rename-delete-renamed";
+    await new ArtifactCatalog(handle.database).upsert({
+      artifactKind: "code",
+      contentHash: "renamed-hash",
+      id: renamedArtifactId,
+      language: "typescript",
+      path: "src/renamed.ts",
+      repositoryId: seed.repositoryId,
+      sizeBytes: 44,
+    });
+    const renamed = {
+      ...entityFact(seed.repositoryId, nextRevisionId),
+      name: "renamed",
+      qualifiedName: "src/renamed.main",
+      stableKey: createEntityStableKey({
+        kind: "function",
+        language: "typescript",
+        qualifiedName: "src/renamed.main",
+        repositoryId: seed.repositoryId,
+      }),
+    };
+    const renamedStage = await stageFactSet(handle.database, {
+      artifactId: renamedArtifactId,
+      entities: [renamed],
+      id: "stage-rename-delete-renamed",
+      relationships: [],
+      repositoryId: seed.repositoryId,
+      revisionId: nextRevisionId,
+    });
+
+    await activateRevisionFacts(handle.database, {
+      deletedArtifactIds: [seed.artifactId],
+      repositoryId: seed.repositoryId,
+      revisionId: nextRevisionId,
+      stagingRunIds: [renamedStage],
+    });
+
+    const paths = await handle.database
+      .selectFrom("source_artifacts")
+      .select("path")
+      .where("repository_id", "=", seed.repositoryId)
+      .orderBy("path")
+      .execute();
+    const unchangedAfter = await handle.database
+      .selectFrom("entities")
+      .select(["id", "last_seen_revision_id"])
+      .where("stable_key", "=", unchanged.stableKey)
+      .executeTakeFirstOrThrow();
+    expect(paths).toEqual([{ path: "src/renamed.ts" }, { path: "src/unchanged.ts" }]);
+    expect(unchangedAfter).toEqual(unchangedBefore);
   });
 
   it("deduplicates outbox events by idempotency key", async () => {

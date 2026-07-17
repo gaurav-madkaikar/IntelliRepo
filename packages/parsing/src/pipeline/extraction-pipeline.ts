@@ -38,9 +38,13 @@ export class ExtractionPipeline {
 
   public async extract(input: ProjectExtractionInput): Promise<ProjectExtractionResult> {
     const detection = detectProject(input.artifacts);
+    const selectedPaths = new Set(
+      input.selectedArtifactPaths ?? input.artifacts.map(({ path }) => path),
+    );
+    const selectedArtifacts = input.artifacts.filter(({ path }) => selectedPaths.has(path));
     const byExtractor = new Map<LanguageExtractor, typeof input.artifacts>();
 
-    for (const artifact of input.artifacts) {
+    for (const artifact of selectedArtifacts) {
       const language = inferArtifactLanguage(artifact) ?? "unknown";
       const extractor = this.registry.extractorFor(language);
       if (extractor !== undefined && extractor.supports(artifact)) {
@@ -53,7 +57,7 @@ export class ExtractionPipeline {
       try {
         const extracted = await extractor.extract({
           ...input,
-          artifacts: input.artifacts,
+          artifacts: supportedArtifacts,
           detection,
         });
         artifacts.push(
@@ -66,7 +70,7 @@ export class ExtractionPipeline {
       }
     }
 
-    for (const artifact of input.artifacts) {
+    for (const artifact of selectedArtifacts) {
       const extractor = this.registry.artifactExtractorFor(artifact);
       if (extractor === undefined) continue;
       try {
