@@ -231,6 +231,28 @@ importers:
         specifier: latest
         version: 26.1.1
 
+  packages/impact:
+    dependencies:
+      '@intellirepo/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@intellirepo/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@intellirepo/graph':
+        specifier: workspace:*
+        version: link:../graph
+      kysely:
+        specifier: 'catalog:'
+        version: 0.29.3
+    devDependencies:
+      '@intellirepo/testkit':
+        specifier: workspace:*
+        version: link:../testkit
+      '@types/node':
+        specifier: latest
+        version: 26.1.1
+
   packages/parsing:
     dependencies:
       '@intellirepo/domain':

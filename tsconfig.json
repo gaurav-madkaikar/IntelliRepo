@@ -8,6 +8,7 @@
     { "path": "./packages/repository" },
     { "path": "./packages/parsing" },
     { "path": "./packages/graph" },
+    { "path": "./packages/impact" },
     { "path": "./apps/api" },
     { "path": "./apps/worker" },
     { "path": "./apps/web" }

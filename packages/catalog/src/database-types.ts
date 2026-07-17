@@ -151,6 +151,35 @@ export interface ProjectionStateTable {
   updated_at: Timestamp;
 }
 
+export interface ImpactReportTable {
+  base_revision_id: string;
+  created_at: Timestamp;
+  id: string;
+  markdown: string;
+  report: JsonObject;
+  repository_id: string;
+  target_revision_id: string;
+}
+
+export interface TestRecommendationTable {
+  confidence_level: string;
+  evidence_path: JsonArray;
+  id: string;
+  impact_report_id: string;
+  reason: string;
+  score: number;
+  test_entity_id: string;
+}
+
+export interface RiskFactorTable {
+  evidence: JsonObject;
+  explanation: string;
+  factor: string;
+  id: string;
+  impact_report_id: string;
+  weight: number;
+}
+
 interface UnusedTable {
   id: string;
 }
@@ -164,7 +193,7 @@ export interface CatalogDatabase {
   documentation_reviews: UnusedTable;
   entities: EntityTable;
   fact_staging_runs: FactStagingRunTable;
-  impact_reports: UnusedTable;
+  impact_reports: ImpactReportTable;
   job_attempts: JobAttemptTable;
   outbox_events: OutboxEventTable;
   projection_states: ProjectionStateTable;
@@ -174,9 +203,9 @@ export interface CatalogDatabase {
   relationships: RelationshipTable;
   repositories: RepositoryTable;
   revisions: RevisionTable;
-  risk_factors: UnusedTable;
+  risk_factors: RiskFactorTable;
   scan_jobs: ScanJobTable;
   semantic_chunks: UnusedTable;
   source_artifacts: SourceArtifactTable;
-  test_recommendations: UnusedTable;
+  test_recommendations: TestRecommendationTable;
 }
