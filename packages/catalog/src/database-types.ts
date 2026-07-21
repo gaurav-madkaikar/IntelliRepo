@@ -14,8 +14,12 @@ type NullableJsonObject = JSONColumnType<
   JsonObjectValue | null
 >;
 type JsonArrayValue = readonly Record<string, unknown>[];
-type JsonArray = JSONColumnType<JsonArrayValue, JsonArrayValue, JsonArrayValue>;
-type StringArray = JSONColumnType<readonly string[], readonly string[], readonly string[]>;
+type JsonArray = JSONColumnType<JsonArrayValue, JsonArrayValue | string, JsonArrayValue | string>;
+type StringArray = JSONColumnType<
+  readonly string[],
+  readonly string[] | string,
+  readonly string[] | string
+>;
 type DefaultString = ColumnType<string, string | undefined, string>;
 type DefaultNumber = ColumnType<number, number | undefined, number>;
 type DefaultJsonObject = JSONColumnType<
@@ -23,7 +27,11 @@ type DefaultJsonObject = JSONColumnType<
   JsonObjectValue | undefined,
   JsonObjectValue
 >;
-type DefaultJsonArray = JSONColumnType<JsonArrayValue, JsonArrayValue | undefined, JsonArrayValue>;
+type DefaultJsonArray = JSONColumnType<
+  JsonArrayValue,
+  JsonArrayValue | string | undefined,
+  JsonArrayValue | string
+>;
 
 export interface RepositoryTable {
   created_at: Timestamp;

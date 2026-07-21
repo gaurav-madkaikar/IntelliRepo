@@ -9,8 +9,8 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
-function jsonArray(value: unknown): readonly Record<string, unknown>[] {
-  return JSON.parse(JSON.stringify(value)) as readonly Record<string, unknown>[];
+function jsonArray(value: unknown): string {
+  return JSON.stringify(value);
 }
 
 export class ImpactReportStore {

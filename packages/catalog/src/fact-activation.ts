@@ -40,8 +40,8 @@ export interface ActivateRevisionFactsInput {
   readonly stagingRunIds: readonly string[];
 }
 
-function toJsonRecords(value: unknown): readonly Record<string, unknown>[] {
-  return JSON.parse(JSON.stringify(value)) as readonly Record<string, unknown>[];
+function serializeJsonArray(value: unknown): string {
+  return JSON.stringify(value);
 }
 
 function asStoredEntities(value: readonly Record<string, unknown>[]): readonly StoredEntityFact[] {
@@ -85,9 +85,9 @@ export async function stageFactSet(
     .values({
       activated_at: null,
       artifact_id: input.artifactId,
-      entities: toJsonRecords(input.entities),
+      entities: serializeJsonArray(input.entities),
       id,
-      relationships: toJsonRecords(input.relationships),
+      relationships: serializeJsonArray(input.relationships),
       repository_id: input.repositoryId,
       revision_id: input.revisionId,
       status: "staged",

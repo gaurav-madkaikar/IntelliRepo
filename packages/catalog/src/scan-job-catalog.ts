@@ -14,6 +14,10 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
 }
 
+function jsonArray(value: unknown): string {
+  return JSON.stringify(value);
+}
+
 function asStages(value: readonly string[]): readonly ScanStage[] {
   return value as readonly ScanStage[];
 }
@@ -63,11 +67,11 @@ function snapshotValues(snapshot: ScanJobSnapshot) {
   return {
     attempt: snapshot.attempt,
     completed_at: snapshot.completedAt ?? null,
-    completed_stages: snapshot.completedStages,
+    completed_stages: jsonArray(snapshot.completedStages),
     counts: { ...(snapshot.counts ?? {}) },
     current_stage: snapshot.currentStage ?? null,
-    degraded_reasons: snapshot.degradedReasons,
-    diagnostics: (snapshot.diagnostics ?? []).map(jsonObject),
+    degraded_reasons: jsonArray(snapshot.degradedReasons),
+    diagnostics: jsonArray(snapshot.diagnostics ?? []),
     dispatch_mode: snapshot.dispatchMode ?? "bullmq",
     dispatch_state: snapshot.dispatchState ?? "pending",
     error: snapshot.error === undefined ? null : jsonObject(snapshot.error),

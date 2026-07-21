@@ -101,14 +101,15 @@ describeWithDocker("runtime state catalog", () => {
 
   it("claims, releases, retries, and publishes outbox events once", async () => {
     const identity = await seed("outbox");
+    const now = new Date("2026-07-21T10:00:00.000Z");
     await enqueueOutboxEvent(handle.database, {
       aggregateId: identity.repositoryId,
+      availableAt: now,
       eventType: "scan.requested",
       idempotencyKey: "scan-runtime-outbox",
       payload: { scanJobId: "scan-runtime-outbox" },
     });
 
-    const now = new Date("2026-07-21T10:00:00.000Z");
     const first = await claimOutboxEvents(handle.database, {
       eventType: "scan.requested",
       now,

@@ -3,7 +3,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Kysely, PostgresDialect } from "kysely";
-import { FileMigrationProvider, Migrator, type MigrationResultSet } from "kysely/migration";
+import {
+  FileMigrationProvider,
+  Migrator,
+  NO_MIGRATIONS,
+  type MigrationResultSet,
+} from "kysely/migration";
 import { Pool } from "pg";
 
 import type { CatalogDatabase } from "./database-types.js";
@@ -47,5 +52,5 @@ export async function migrateCatalogDown(
   database: Kysely<CatalogDatabase>,
   migrationFolder?: string,
 ): Promise<MigrationResultSet> {
-  return createMigrator(database, migrationFolder).migrateDown();
+  return createMigrator(database, migrationFolder).migrateTo(NO_MIGRATIONS);
 }

@@ -6,6 +6,7 @@ import type { CatalogDatabase, OutboxEventTable } from "./database-types.js";
 
 export interface OutboxEventInput {
   readonly aggregateId: string;
+  readonly availableAt?: Date;
   readonly eventType: string;
   readonly idempotencyKey: string;
   readonly payload: Readonly<Record<string, unknown>>;
@@ -49,6 +50,7 @@ export async function enqueueOutboxEvent(
       id: randomUUID(),
       idempotency_key: input.idempotencyKey,
       last_error: null,
+      next_attempt_at: input.availableAt ?? new Date(),
       payload: { ...input.payload },
       published_at: null,
     })
