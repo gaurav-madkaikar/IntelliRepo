@@ -37,8 +37,8 @@ describeWithDocker("catalog integration", () => {
   });
 
   afterAll(async () => {
-    await handle.destroy();
-    await container.stop();
+    if (handle !== undefined) await handle.destroy();
+    if (container !== undefined) await container.stop();
   });
 
   async function seedCatalog(suffix: string) {
@@ -362,6 +362,8 @@ describeWithDocker("catalog integration", () => {
       createdAt: "2026-07-15T00:00:00.000Z",
       currentStage: "DISCOVERING",
       degradedReasons: [],
+      dispatchMode: "bullmq",
+      dispatchState: "pending",
       id: createScanJobId(request),
       ...request,
       stageTimings: { DISCOVERING: { startedAt: "2026-07-15T00:00:01.000Z" } },

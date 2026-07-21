@@ -16,6 +16,14 @@ type NullableJsonObject = JSONColumnType<
 type JsonArrayValue = readonly Record<string, unknown>[];
 type JsonArray = JSONColumnType<JsonArrayValue, JsonArrayValue, JsonArrayValue>;
 type StringArray = JSONColumnType<readonly string[], readonly string[], readonly string[]>;
+type DefaultString = ColumnType<string, string | undefined, string>;
+type DefaultNumber = ColumnType<number, number | undefined, number>;
+type DefaultJsonObject = JSONColumnType<
+  JsonObjectValue,
+  JsonObjectValue | undefined,
+  JsonObjectValue
+>;
+type DefaultJsonArray = JSONColumnType<JsonArrayValue, JsonArrayValue | undefined, JsonArrayValue>;
 
 export interface RepositoryTable {
   created_at: Timestamp;
@@ -108,11 +116,19 @@ export interface ScanJobTable {
   attempt: number;
   completed_at: NullableTimestamp;
   completed_stages: StringArray;
+  counts: DefaultJsonObject;
   created_at: Timestamp;
   current_stage: string | null;
   degraded_reasons: StringArray;
+  diagnostics: DefaultJsonArray;
+  dispatch_mode: DefaultString;
+  dispatch_state: DefaultString;
   error: NullableJsonObject;
+  heartbeat_at: NullableTimestamp;
   id: string;
+  lease_expires_at: NullableTimestamp;
+  lease_owner: string | null;
+  recoverable_stage: string | null;
   repository_id: string;
   revision_id: string;
   stage_timings: JsonObject;
@@ -134,11 +150,16 @@ export interface JobAttemptTable {
 
 export interface OutboxEventTable {
   aggregate_id: string;
+  claim_owner: string | null;
+  claimed_at: NullableTimestamp;
   created_at: Timestamp;
   event_type: string;
   id: string;
   idempotency_key: string;
+  last_error: NullableJsonObject;
+  next_attempt_at: Timestamp;
   payload: JsonObject;
+  publish_attempt: DefaultNumber;
   published_at: NullableTimestamp;
 }
 
@@ -224,12 +245,29 @@ export interface DocumentationReviewTable {
   applied_at: NullableTimestamp;
   created_at: Timestamp;
   diff: string;
+  explanation: DefaultJsonObject;
   finding_id: string | null;
   id: string;
+  manifest: DefaultJsonObject;
+  original_checksum: DefaultString;
   proposed_markdown: string;
   repository_id: string;
+  request: DefaultJsonObject;
   revision_id: string;
   state: string;
+  target_path: DefaultString;
+}
+
+export interface QuestionTaskTable {
+  created_at: Timestamp;
+  error: NullableJsonObject;
+  id: string;
+  question: string;
+  repository_id: string;
+  result: NullableJsonObject;
+  revision_id: string;
+  state: string;
+  updated_at: Timestamp;
 }
 
 export interface DocumentationHealthTable {
@@ -298,6 +336,7 @@ export interface CatalogDatabase {
   projection_states: ProjectionStateTable;
   provenance: ProvenanceTable;
   question_sessions: QuestionSessionTable;
+  question_tasks: QuestionTaskTable;
   questions: QuestionTable;
   relationships: RelationshipTable;
   repositories: RepositoryTable;
