@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import type {
+  IndexingDispatchMode,
+  ScanDispatchState,
+  ScanJobState,
+  ScanStage,
+} from "./jobs/scan-job.js";
+
 const identifier = z.string().trim().min(1).max(256);
 const positiveLimit = z.coerce.number().int().min(1);
 
@@ -81,10 +88,11 @@ export interface CapabilityStatus {
 
 export interface RepositoryOverviewResponse {
   readonly capabilities: {
+    readonly analysis: CapabilityStatus;
     readonly canonical: CapabilityStatus;
-    readonly neo4j: CapabilityStatus;
     readonly ollama: CapabilityStatus;
     readonly semantic: CapabilityStatus;
+    readonly worker: WorkerCapabilityStatus;
   };
   readonly counts: Readonly<Record<string, number>>;
   readonly documentationHealth?: {
@@ -94,7 +102,11 @@ export interface RepositoryOverviewResponse {
   readonly latestJob?: ScanJobSummary;
   readonly repository: RepositorySummary;
   readonly revision?: RevisionSummary;
-  readonly selectedTraversalAdapter: "neo4j" | "postgresql";
+  readonly selectedTraversalAdapter: "postgresql";
+}
+
+export interface WorkerCapabilityStatus extends CapabilityStatus {
+  readonly dispatchMode: IndexingDispatchMode;
 }
 
 export interface RepositorySummary {
@@ -113,12 +125,114 @@ export interface RevisionSummary {
 
 export interface ScanJobSummary {
   readonly attempt: number;
-  readonly currentStage?: string;
+  readonly currentStage?: ScanStage;
   readonly degradedReasons: readonly string[];
+  readonly dispatchMode?: IndexingDispatchMode;
+  readonly dispatchState?: ScanDispatchState;
   readonly id: string;
   readonly revisionId: string;
-  readonly state: string;
+  readonly state: ScanJobState;
   readonly updatedAt: string;
+}
+
+export interface GraphNodeResponse {
+  readonly attributes: Readonly<Record<string, unknown>>;
+  readonly id: string;
+  readonly kind: string;
+  readonly name: string;
+  readonly qualifiedName?: string;
+  readonly stableKey: string;
+}
+
+export interface GraphEdgeResponse {
+  readonly attributes: Readonly<Record<string, unknown>>;
+  readonly id: string;
+  readonly kind: string;
+  readonly sourceId: string;
+  readonly targetId: string;
+}
+
+export interface GraphNeighborhoodResponse {
+  readonly adapter: "postgresql";
+  readonly edges: readonly GraphEdgeResponse[];
+  readonly missingStartEntityKeys: readonly string[];
+  readonly nodes: readonly GraphNodeResponse[];
+  readonly repositoryId: string;
+  readonly revisionId: string;
+  readonly truncated: boolean;
+}
+
+export interface ImpactSourceReferenceResponse {
+  readonly artifactPath: string;
+  readonly endLine?: number;
+  readonly evidence: string;
+  readonly startLine?: number;
+}
+
+export interface ImpactTestRecommendationResponse {
+  readonly confidence: {
+    readonly level: "confirmed" | "inferred" | "tentative";
+    readonly reason: string;
+    readonly score: number;
+  };
+  readonly reason: string;
+  readonly score: number;
+  readonly testEntity: {
+    readonly kind: string;
+    readonly name: string;
+    readonly source?: ImpactSourceReferenceResponse;
+    readonly stableKey: string;
+  };
+}
+
+export interface ChangeImpactResponse {
+  readonly affected: {
+    readonly truncated: boolean;
+  };
+  readonly affectedApis: readonly string[];
+  readonly affectedDocumentation: readonly string[];
+  readonly affectedModules: readonly string[];
+  readonly baseRevisionId: string;
+  readonly changedFiles: readonly string[];
+  readonly generatedAt: string;
+  readonly markdown: string;
+  readonly repositoryId: string;
+  readonly reviewFocus: readonly string[];
+  readonly risk: {
+    readonly factors: readonly {
+      readonly evidence: readonly string[];
+      readonly explanation: string;
+      readonly factor: string;
+      readonly weight: number;
+    }[];
+    readonly level: "High" | "Low" | "Medium";
+    readonly score: number;
+  };
+  readonly targetRevisionId: string;
+  readonly tests: readonly ImpactTestRecommendationResponse[];
+}
+
+export interface DocumentationReviewResponse {
+  readonly diff: string;
+  readonly enhancement: {
+    readonly reason?: string;
+    readonly state: "applied" | "degraded" | "disabled";
+  };
+  readonly id: string;
+  readonly manifest: {
+    readonly entityKeys: readonly string[];
+    readonly generatedBy: "IntelliRepo";
+    readonly kind: DocumentationPreviewRequest["kind"];
+    readonly relationshipIds: readonly string[];
+    readonly repositoryId: string;
+    readonly revisionId: string;
+    readonly sourceReferences: readonly string[];
+  };
+  readonly originalChecksum: string;
+  readonly path: string;
+  readonly proposedMarkdown: string;
+  readonly repositoryId: string;
+  readonly revisionId: string;
 }
 
 export interface EntitySearchResult {

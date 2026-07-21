@@ -3,7 +3,7 @@ import { performance } from "node:perf_hooks";
 
 import type { ApplicationConfig } from "./config.js";
 
-export type DependencyName = "neo4j" | "ollama" | "postgres" | "redis";
+export type DependencyName = "ollama" | "postgres" | "redis";
 export type DependencyState = "disabled" | "down" | "up";
 export type OverallHealthState = "degraded" | "healthy" | "unhealthy";
 
@@ -24,7 +24,6 @@ export interface InfrastructureHealth {
 export type DependencyChecker = () => Promise<void>;
 
 export interface InfrastructureCheckers {
-  readonly neo4j: DependencyChecker;
   readonly ollama: DependencyChecker;
   readonly postgres: DependencyChecker;
   readonly redis: DependencyChecker;
@@ -90,10 +89,12 @@ async function checkOllama(baseUrl: string, timeoutMs: number): Promise<void> {
 
 function defaultCheckers(config: ApplicationConfig): InfrastructureCheckers {
   return {
-    neo4j: () => checkTcp(config.neo4jUri),
     ollama: () => checkOllama(config.ollamaBaseUrl, config.ollamaTimeoutMs),
     postgres: () => checkTcp(config.databaseUrl),
-    redis: () => checkTcp(config.redisUrl),
+    redis: () => {
+      if (config.redisUrl === undefined) throw new Error("Redis is not configured in inline mode");
+      return checkTcp(config.redisUrl);
+    },
   };
 }
 
@@ -161,10 +162,9 @@ export async function checkInfrastructureHealth(
 ): Promise<InfrastructureHealth> {
   const dependencies = await Promise.all([
     runCheck("postgres", true, checkers.postgres),
-    config.neo4jEnabled
-      ? runCheck("neo4j", false, checkers.neo4j)
-      : Promise.resolve(disabledDependency("neo4j")),
-    runCheck("redis", true, checkers.redis),
+    config.indexingMode === "bullmq"
+      ? runCheck("redis", true, checkers.redis)
+      : Promise.resolve(disabledDependency("redis")),
     config.ollamaEnabled
       ? runCheck("ollama", false, checkers.ollama)
       : Promise.resolve(disabledDependency("ollama")),

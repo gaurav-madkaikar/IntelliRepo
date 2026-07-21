@@ -1,12 +1,15 @@
 import type {
   AskQuestionRequest,
+  ChangeImpactResponse,
   DocumentationApplyRequest,
   DocumentationHealthQuery,
   DocumentationHealthResponse,
   DocumentationPreviewRequest,
+  DocumentationReviewResponse,
   EntitySearchRequest,
   EntitySearchResult,
   GraphNeighborhoodRequest,
+  GraphNeighborhoodResponse,
   QuestionTaskResponse,
   RepositoryOverviewResponse,
   RevisionPairRequest,
@@ -52,14 +55,17 @@ export class ProductApiClient {
     );
   }
 
-  public graph(repositoryId: string, query: GraphNeighborhoodRequest): Promise<unknown> {
+  public graph(
+    repositoryId: string,
+    query: GraphNeighborhoodRequest,
+  ): Promise<GraphNeighborhoodResponse> {
     return this.request(`/repositories/${encodeURIComponent(repositoryId)}/graph/neighborhood`, {
       body: JSON.stringify(query),
       method: "POST",
     });
   }
 
-  public impact(repositoryId: string, query: RevisionPairRequest): Promise<unknown> {
+  public impact(repositoryId: string, query: RevisionPairRequest): Promise<ChangeImpactResponse> {
     return this.request(
       `/repositories/${encodeURIComponent(repositoryId)}/impact${queryString(query)}`,
     );
@@ -74,8 +80,11 @@ export class ProductApiClient {
     );
   }
 
-  public previewDocumentation(repositoryId: string, input: DocumentationPreviewRequest) {
-    return this.request(
+  public previewDocumentation(
+    repositoryId: string,
+    input: DocumentationPreviewRequest,
+  ): Promise<DocumentationReviewResponse> {
+    return this.request<DocumentationReviewResponse>(
       `/repositories/${encodeURIComponent(repositoryId)}/documentation/previews`,
       { body: JSON.stringify(input), method: "POST" },
     );
@@ -85,8 +94,8 @@ export class ProductApiClient {
     repositoryId: string,
     reviewId: string,
     input: DocumentationApplyRequest,
-  ) {
-    return this.request(
+  ): Promise<{ readonly applied: true }> {
+    return this.request<{ readonly applied: true }>(
       `/repositories/${encodeURIComponent(repositoryId)}/documentation/previews/${encodeURIComponent(reviewId)}/apply`,
       { body: JSON.stringify(input), method: "POST" },
     );

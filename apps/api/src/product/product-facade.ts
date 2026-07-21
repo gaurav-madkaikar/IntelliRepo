@@ -14,17 +14,22 @@ import {
   createScanJobId,
   type ApplicationConfig,
   type AskQuestionRequest,
+  type ChangeImpactResponse,
   type DocumentationHealthQuery,
   type DocumentationHealthResponse,
   type DocumentationPreviewRequest,
+  type DocumentationReviewResponse,
   type EntitySearchRequest,
   type EntitySearchResult,
   type GraphNeighborhoodRequest,
+  type GraphNeighborhoodResponse,
   type QuestionTaskResponse,
   type RegisterRepositoryRequest,
   type RepositoryOverviewResponse,
   type RevisionPairRequest,
   type ScanJobSnapshot,
+  type ScanJobState,
+  type ScanStage,
   type TriggerScanRequest,
 } from "@intellirepo/contracts";
 import {
@@ -50,12 +55,13 @@ import { sql, type Kysely } from "kysely";
 export const PRODUCT_FACADE = Symbol("PRODUCT_FACADE");
 
 export interface ProductDiagnostics {
+  readonly analysis: { readonly state: string };
   readonly canonicalStore: "postgresql";
   readonly deterministicFeaturesAvailable: true;
-  readonly neo4j: { readonly enabled: boolean; readonly state: string };
   readonly ollama: { readonly enabled: boolean; readonly state: string };
   readonly repositoryId: string;
   readonly semantic: { readonly state: string };
+  readonly worker: { readonly mode: "bullmq" | "inline"; readonly state: string };
 }
 
 export interface ProductFacade {
@@ -65,14 +71,14 @@ export interface ProductFacade {
     repositoryId: string,
     query: DocumentationHealthQuery,
   ): Promise<DocumentationHealthResponse>;
-  graph(repositoryId: string, query: GraphNeighborhoodRequest): Promise<unknown>;
-  impact(repositoryId: string, query: RevisionPairRequest): Promise<unknown>;
+  graph(repositoryId: string, query: GraphNeighborhoodRequest): Promise<GraphNeighborhoodResponse>;
+  impact(repositoryId: string, query: RevisionPairRequest): Promise<ChangeImpactResponse>;
   listRepositories(): Promise<readonly unknown[]>;
   overview(repositoryId: string): Promise<RepositoryOverviewResponse>;
   previewDocumentation(
     repositoryId: string,
     input: DocumentationPreviewRequest,
-  ): Promise<DocumentationReviewPreview>;
+  ): Promise<DocumentationReviewResponse>;
   question(repositoryId: string, taskId: string): Promise<QuestionTaskResponse<RepositoryAnswer>>;
   registerRepository(input: RegisterRepositoryRequest): Promise<unknown>;
   retryScan(repositoryId: string, jobId: string): Promise<ScanJobSnapshot>;
@@ -208,15 +214,15 @@ export class PostgresProductFacade implements ProductFacade {
         ? undefined
         : await new DocumentationCatalog(this.database).findHealth(repositoryId, revision.id);
     const projections = new ProjectionStateCatalog(this.database);
-    const [neo4j, semantic] = await Promise.all([
-      projections.find(repositoryId, "neo4j"),
+    const [analysis, semantic] = await Promise.all([
+      projections.find(repositoryId, "analysis"),
       projections.find(repositoryId, "semantic"),
     ]);
     const capability = (
-      projection: typeof neo4j,
+      projection: typeof semantic,
       disabled: boolean,
       label: string,
-    ): RepositoryOverviewResponse["capabilities"]["neo4j"] => {
+    ): RepositoryOverviewResponse["capabilities"]["semantic"] => {
       if (disabled)
         return {
           detail: `${label} is disabled; PostgreSQL remains available`,
@@ -241,6 +247,7 @@ export class PostgresProductFacade implements ProductFacade {
     };
     return {
       capabilities: {
+        analysis: capability(analysis, false, "Revision analysis"),
         canonical: {
           detail:
             revision === undefined ? "No active scan" : "PostgreSQL canonical facts are current",
@@ -248,15 +255,23 @@ export class PostgresProductFacade implements ProductFacade {
           ...(revision === undefined ? {} : { projectedRevisionId: revision.id }),
           state: revision === undefined ? "degraded" : "current",
         },
-        neo4j: capability(neo4j, !this.config.neo4jEnabled, "Neo4j projection"),
         ollama: {
           detail: this.config.ollamaEnabled
-            ? "Ollama configured; failures degrade to deterministic evidence"
+            ? "Ollama configured; live model capability check pending"
             : "Ollama disabled; deterministic answers remain available",
           lagRevisions: 0,
-          state: this.config.ollamaEnabled ? "current" : "disabled",
+          state: this.config.ollamaEnabled ? "degraded" : "disabled",
         },
         semantic: capability(semantic, !this.config.ollamaEnabled, "pgvector semantic projection"),
+        worker: {
+          detail:
+            this.config.indexingMode === "inline"
+              ? "Explicit in-process local demo dispatch"
+              : "BullMQ asynchronous worker dispatch configured",
+          dispatchMode: this.config.indexingMode,
+          lagRevisions: 0,
+          state: "current",
+        },
       },
       counts: Object.fromEntries(entityCounts.map(({ count, kind }) => [kind, count])),
       ...(health === undefined
@@ -269,11 +284,11 @@ export class PostgresProductFacade implements ProductFacade {
               attempt: latestJob.attempt,
               ...(latestJob.current_stage === null
                 ? {}
-                : { currentStage: latestJob.current_stage }),
+                : { currentStage: latestJob.current_stage as ScanStage }),
               degradedReasons: latestJob.degraded_reasons,
               id: latestJob.id,
               revisionId: latestJob.revision_id,
-              state: latestJob.state,
+              state: latestJob.state as ScanJobState,
               updatedAt: latestJob.updated_at.toISOString(),
             },
           }),
@@ -403,16 +418,33 @@ export class PostgresProductFacade implements ProductFacade {
     };
   }
 
-  public async graph(repositoryId: string, query: GraphNeighborhoodRequest): Promise<unknown> {
+  public async graph(
+    repositoryId: string,
+    query: GraphNeighborhoodRequest,
+  ): Promise<GraphNeighborhoodResponse> {
     const revision = await this.revision(repositoryId, query.revisionId);
-    return new PostgresGraphTraversal(new PostgresCanonicalGraphReader(this.database)).traverse({
+    const result = await new PostgresGraphTraversal(
+      new PostgresCanonicalGraphReader(this.database),
+    ).traverse({
       ...query,
       repositoryId,
       revisionId: revision.id,
     });
+    return {
+      adapter: "postgresql",
+      edges: result.edges,
+      missingStartEntityKeys: result.missingStartEntityKeys,
+      nodes: result.nodes,
+      repositoryId: result.repositoryId,
+      revisionId: result.revisionId,
+      truncated: result.truncated,
+    };
   }
 
-  public async impact(repositoryId: string, query: RevisionPairRequest): Promise<unknown> {
+  public async impact(
+    repositoryId: string,
+    query: RevisionPairRequest,
+  ): Promise<ChangeImpactResponse> {
     await this.repository(repositoryId);
     const report = await this.database
       .selectFrom("impact_reports")
@@ -425,8 +457,12 @@ export class PostgresProductFacade implements ProductFacade {
       throw new ApiResourceNotFoundError(
         `No impact report exists for ${query.baseRevisionId} → ${query.targetRevisionId}`,
       );
+    const stored = report.report as unknown as Omit<
+      ChangeImpactResponse,
+      "generatedAt" | "markdown"
+    >;
     return {
-      ...report.report,
+      ...stored,
       generatedAt: report.created_at.toISOString(),
       markdown: report.markdown,
     };
@@ -522,7 +558,7 @@ export class PostgresProductFacade implements ProductFacade {
   public async previewDocumentation(
     repositoryId: string,
     input: DocumentationPreviewRequest,
-  ): Promise<DocumentationReviewPreview> {
+  ): Promise<DocumentationReviewResponse> {
     const repository = await this.repository(repositoryId);
     const revision = await this.revision(repositoryId, input.revisionId);
     const workflow = new DocumentationReviewWorkflow(
@@ -630,14 +666,14 @@ export class PostgresProductFacade implements ProductFacade {
   public async diagnostics(repositoryId: string): Promise<ProductDiagnostics> {
     await this.repository(repositoryId);
     const projections = new ProjectionStateCatalog(this.database);
-    const [neo4j, semantic] = await Promise.all([
-      projections.find(repositoryId, "neo4j"),
+    const [analysis, semantic] = await Promise.all([
+      projections.find(repositoryId, "analysis"),
       projections.find(repositoryId, "semantic"),
     ]);
     return {
+      analysis: { state: analysis?.state ?? "not_analyzed" },
       canonicalStore: "postgresql",
       deterministicFeaturesAvailable: true,
-      neo4j: { enabled: this.config.neo4jEnabled, state: neo4j?.state ?? "not_projected" },
       ollama: {
         enabled: this.config.ollamaEnabled,
         state: this.config.ollamaEnabled ? "configured" : "disabled",
@@ -646,6 +682,7 @@ export class PostgresProductFacade implements ProductFacade {
       semantic: {
         state: semantic?.state ?? (this.config.ollamaEnabled ? "not_projected" : "disabled"),
       },
+      worker: { mode: this.config.indexingMode, state: "configured" },
     };
   }
 }

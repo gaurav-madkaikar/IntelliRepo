@@ -3,7 +3,7 @@ packages:
   - packages/*
 
 allowBuilds:
-  "@scarf/scarf": set this to true or false
+  "@scarf/scarf": false
   cpu-features: false
   esbuild: true
   msgpackr-extract: false

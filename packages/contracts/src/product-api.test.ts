@@ -6,6 +6,7 @@ import {
   documentationApplySchema,
   graphNeighborhoodSchema,
   registerRepositorySchema,
+  type RepositoryOverviewResponse,
 } from "./product-api.js";
 
 describe("product API contracts", () => {
@@ -37,5 +38,28 @@ describe("product API contracts", () => {
     const schema = z.toJSONSchema(registerRepositorySchema);
     expect(schema.required).toContain("rootPath");
     expect(schema.properties).toHaveProperty("rootPath");
+  });
+
+  it("keeps PostgreSQL as the only advertised traversal adapter", () => {
+    const overview = {
+      capabilities: {
+        analysis: { detail: "current", lagRevisions: 0, state: "current" },
+        canonical: { detail: "current", lagRevisions: 0, state: "current" },
+        ollama: { detail: "available", lagRevisions: 0, state: "current" },
+        semantic: { detail: "current", lagRevisions: 0, state: "current" },
+        worker: {
+          detail: "BullMQ worker available",
+          dispatchMode: "bullmq",
+          lagRevisions: 0,
+          state: "current",
+        },
+      },
+      counts: {},
+      repository: { displayName: "sample", id: "repository-1", rootPath: "/workspace/sample" },
+      selectedTraversalAdapter: "postgresql",
+    } satisfies RepositoryOverviewResponse;
+
+    expect(overview.selectedTraversalAdapter).toBe("postgresql");
+    expect(Object.keys(overview.capabilities)).not.toContain("neo4j");
   });
 });
