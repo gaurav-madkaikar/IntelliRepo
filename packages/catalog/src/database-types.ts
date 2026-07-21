@@ -241,12 +241,49 @@ export interface DocumentationHealthTable {
   score: number;
 }
 
-interface UnusedTable {
+export interface SemanticChunkTable {
+  checksum: string;
+  embedding: ColumnType<unknown | null, unknown | null, unknown | null>;
   id: string;
+  metadata: JsonObject;
+  redacted_content: string;
+  repository_id: string;
+  revision_id: string;
+  source_id: string;
+  source_kind: string;
+}
+
+export interface QuestionSessionTable {
+  created_at: Timestamp;
+  id: string;
+  repository_id: string;
+  revision_id: string;
+}
+
+export interface QuestionTable {
+  answer: string | null;
+  confidence_level: string | null;
+  created_at: Timestamp;
+  degraded: boolean;
+  id: string;
+  intent: string | null;
+  question: string;
+  session_id: string;
+}
+
+export interface AnswerReferenceTable {
+  artifact_path: string;
+  end_line: number | null;
+  evidence: string;
+  id: string;
+  line_start: number | null;
+  question_id: string;
+  source_id: string;
+  source_kind: string;
 }
 
 export interface CatalogDatabase {
-  answer_references: UnusedTable;
+  answer_references: AnswerReferenceTable;
   document_claims: DocumentClaimTable;
   document_pages: DocumentPageTable;
   document_sections: DocumentSectionTable;
@@ -260,14 +297,14 @@ export interface CatalogDatabase {
   outbox_events: OutboxEventTable;
   projection_states: ProjectionStateTable;
   provenance: ProvenanceTable;
-  question_sessions: UnusedTable;
-  questions: UnusedTable;
+  question_sessions: QuestionSessionTable;
+  questions: QuestionTable;
   relationships: RelationshipTable;
   repositories: RepositoryTable;
   revisions: RevisionTable;
   risk_factors: RiskFactorTable;
   scan_jobs: ScanJobTable;
-  semantic_chunks: UnusedTable;
+  semantic_chunks: SemanticChunkTable;
   source_artifacts: SourceArtifactTable;
   test_recommendations: TestRecommendationTable;
 }

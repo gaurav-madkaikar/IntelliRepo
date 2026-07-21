@@ -2,7 +2,8 @@ import type { Kysely, Selectable } from "kysely";
 
 import type { CatalogDatabase, ProjectionStateTable } from "./database-types.js";
 
-export type ProjectionStatus = "current" | "delayed" | "pending" | "projecting";
+export type ProjectionStatus =
+  "current" | "delayed" | "disabled" | "failed" | "pending" | "projecting" | "stale";
 
 export interface SaveProjectionStateInput {
   readonly error?: Readonly<Record<string, unknown>>;

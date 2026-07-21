@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/qa.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../ai" },
+    { "path": "../catalog" },
+    { "path": "../embeddings" },
+    { "path": "../graph" },
+    { "path": "../testkit" }
+  ]
+}

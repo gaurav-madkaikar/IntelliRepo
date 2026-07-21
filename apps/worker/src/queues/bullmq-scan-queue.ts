@@ -5,7 +5,6 @@ import {
   type ScanStage,
 } from "@intellirepo/contracts";
 import { FlowProducer, type FlowJob } from "bullmq";
-import { Redis } from "ioredis";
 
 import type { ScanQueue } from "./scan-queue.js";
 
@@ -34,12 +33,12 @@ export function buildScanFlow(request: ScanJobRequest): FlowJob {
 }
 
 export class BullMqScanQueue implements ScanQueue {
-  private readonly connection: Redis;
   private readonly producer: FlowProducer;
 
   public constructor(redisUrl: string) {
-    this.connection = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: null });
-    this.producer = new FlowProducer({ connection: this.connection });
+    this.producer = new FlowProducer({
+      connection: { lazyConnect: true, maxRetriesPerRequest: null, url: redisUrl },
+    });
   }
 
   public async enqueue(request: ScanJobRequest): Promise<string> {
@@ -50,6 +49,5 @@ export class BullMqScanQueue implements ScanQueue {
 
   public async close(): Promise<void> {
     await this.producer.close();
-    this.connection.disconnect();
   }
 }

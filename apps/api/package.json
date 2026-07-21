@@ -13,12 +13,20 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@intellirepo/catalog": "workspace:*",
     "@intellirepo/contracts": "workspace:*",
+    "@intellirepo/documentation": "workspace:*",
+    "@intellirepo/graph": "workspace:*",
+    "@intellirepo/qa": "workspace:*",
+    "@intellirepo/repository": "workspace:*",
     "@nestjs/common": "catalog:",
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "kysely": "catalog:",
     "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "rxjs": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "latest"
