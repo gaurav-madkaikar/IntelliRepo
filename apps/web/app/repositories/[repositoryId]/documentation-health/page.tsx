@@ -1,67 +1,79 @@
-import { findings } from "../../../../lib/demo-data";
-import { PageIntro, Panel, PanelHeader, SourceRef } from "../../../../components/ui";
+import { ProductErrorState } from "../../../../components/product-error-state";
+import { PageIntro, Panel, PanelHeader } from "../../../../components/ui";
+import { ProductApiClient } from "../../../../lib/product-api";
 
-export default function DocumentationHealthPage() {
+export default async function DocumentationHealthPage({
+  params,
+}: {
+  readonly params: Promise<{ repositoryId: string }>;
+}) {
+  const { repositoryId } = await params;
+  let health;
+  try {
+    health = await new ProductApiClient().documentationHealth(repositoryId, {});
+  } catch (error) {
+    return (
+      <ProductErrorState
+        reason={error instanceof Error ? error.message : "Documentation API unavailable"}
+      />
+    );
+  }
   return (
     <>
       <PageIntro
         eyebrow="03 / DOC HEALTH"
         title="Claims vs. code"
-        summary="Deterministic stale-claim and coverage analysis. Every finding carries the code and documentation evidence used to produce it."
+        summary="Deterministic stale-claim and coverage analysis. Every finding carries the evidence used to produce it."
       />
       <div className="health-summary">
         <div>
-          <strong>82</strong>
+          <strong>{health.score}</strong>
           <span>HEALTH SCORE</span>
         </div>
         <div>
-          <strong>3</strong>
+          <strong>{health.findings.length}</strong>
           <span>OPEN FINDINGS</span>
         </div>
         <div>
-          <strong>1</strong>
-          <span>UNDOCUMENTED API</span>
+          <strong>
+            {health.findings.filter(({ kind }) => kind === "missing_documentation").length}
+          </strong>
+          <span>DOCUMENTATION GAPS</span>
         </div>
         <div>
-          <strong>94%</strong>
-          <span>INDEX COMPLETENESS</span>
+          <strong>{health.revisionId.slice(0, 8)}</strong>
+          <span>ACTIVE REVISION</span>
         </div>
       </div>
       <Panel>
         <PanelHeader
-          eyebrow="ACTIVE REVISION 9f2c71a"
+          eyebrow={`ACTIVE REVISION ${health.revisionId}`}
           title="Documentation findings"
-          action={
-            <div className="filter-pills">
-              <button className="active" type="button">
-                ALL 3
-              </button>
-              <button type="button">STALE 2</button>
-              <button type="button">GAPS 1</button>
-            </div>
-          }
         />
-        <div className="findings-list">
-          {findings.map((finding) => (
-            <article className="finding" key={finding.id}>
-              <div className={`severity-bar severity-${finding.severity}`} />
-              <div className="finding-id">
-                <span>{finding.id}</span>
-                <b className={`severity-text severity-${finding.severity}`}>{finding.severity}</b>
-              </div>
-              <div className="finding-copy">
-                <h3>{finding.kind}</h3>
-                <p>{finding.detail}</p>
-                <SourceRef>{finding.evidence}</SourceRef>
-              </div>
-              <div className="suggestion">
-                <span>SUGGESTED REPAIR</span>
-                <p>{finding.suggestion}</p>
-                <button type="button">PREVIEW FIX →</button>
-              </div>
-            </article>
-          ))}
-        </div>
+        {health.findings.length === 0 ? (
+          <div className="live-empty">No findings for the active canonical revision.</div>
+        ) : (
+          <div className="findings-list">
+            {health.findings.map((finding) => (
+              <article className="finding" key={finding.id}>
+                <div className={`severity-bar severity-${finding.severity}`} />
+                <div className="finding-id">
+                  <span>{finding.id.slice(0, 16)}</span>
+                  <b className={`severity-text severity-${finding.severity}`}>{finding.severity}</b>
+                </div>
+                <div className="finding-copy">
+                  <h3>{finding.kind.replaceAll("_", " ")}</h3>
+                  <p>{String(finding.evidence.message ?? health.explanation)}</p>
+                </div>
+                <div className="suggestion">
+                  <span>STATUS</span>
+                  <p>{finding.status}</p>
+                  <code>{JSON.stringify(finding.evidence)}</code>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </Panel>
     </>
   );

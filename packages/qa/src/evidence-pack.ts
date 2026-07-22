@@ -28,6 +28,7 @@ export interface SemanticSearch {
     repositoryId: string,
     query: string,
     limit?: number,
+    revisionId?: string,
   ): Promise<readonly SemanticSearchResult[]>;
 }
 
@@ -162,7 +163,12 @@ export class EvidencePackBuilder {
       degradedReasons.push("Semantic projection is unavailable");
     } else {
       try {
-        semantic = await this.semantic.search(input.repositoryId, input.question, 6);
+        semantic = await this.semantic.search(
+          input.repositoryId,
+          input.question,
+          6,
+          input.revisionId,
+        );
       } catch (error) {
         degradedReasons.push(
           `Semantic retrieval failed: ${error instanceof Error ? error.message : String(error)}`,

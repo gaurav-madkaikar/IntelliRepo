@@ -32,16 +32,21 @@ describe("loadApplicationConfig", () => {
   });
 
   it("does not require or expose Redis in explicit inline mode", () => {
-    const config = loadApplicationConfig({ INDEXING_MODE: "inline", REDIS_URL: "" }, "/workspace");
+    const config = loadApplicationConfig(
+      { GITHUB_TOKEN: "", INDEXING_MODE: "inline", REDIS_URL: "" },
+      "/workspace",
+    );
 
     expect(config.indexingMode).toBe("inline");
     expect(config.redisUrl).toBeUndefined();
+    expect(config.githubToken).toBeUndefined();
   });
 
   it("accepts explicit application settings", () => {
     const config = loadApplicationConfig(
       {
         API_PORT: "4200",
+        GITHUB_TOKEN: "runtime-only-token",
         INDEXING_MODE: "bullmq",
         MAX_FILE_BYTES: "2048",
         MAX_REPOSITORY_FILES: "2500",
@@ -57,6 +62,7 @@ describe("loadApplicationConfig", () => {
     );
 
     expect(config.apiPort).toBe(4200);
+    expect(config.githubToken).toBe("runtime-only-token");
     expect(config.maxFileBytes).toBe(2048);
     expect(config.maxRepositoryFiles).toBe(2500);
     expect(config.nodeEnv).toBe("test");

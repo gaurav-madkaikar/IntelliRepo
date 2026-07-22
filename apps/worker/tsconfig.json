@@ -9,5 +9,10 @@
     "tsBuildInfoFile": "dist/worker.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../packages/contracts" }]
+  "references": [
+    { "path": "../../packages/ai" },
+    { "path": "../../packages/catalog" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/indexing" }
+  ]
 }

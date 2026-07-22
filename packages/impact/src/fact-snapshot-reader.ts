@@ -108,4 +108,42 @@ export class PostgresFactSnapshotReader {
     });
     return { entities, relationships, repositoryId, revisionId };
   }
+
+  public async captureCurrent(repositoryId: string, revisionId: string): Promise<FactSnapshot> {
+    const snapshot = await this.read(repositoryId, revisionId);
+    await this.database
+      .insertInto("revision_fact_snapshots")
+      .values({
+        entities: JSON.stringify(snapshot.entities),
+        relationships: JSON.stringify(snapshot.relationships),
+        repository_id: repositoryId,
+        revision_id: revisionId,
+      })
+      .onConflict((conflict) =>
+        conflict.columns(["repository_id", "revision_id"]).doUpdateSet({
+          captured_at: new Date(),
+          entities: JSON.stringify(snapshot.entities),
+          relationships: JSON.stringify(snapshot.relationships),
+        }),
+      )
+      .execute();
+    return snapshot;
+  }
+
+  public async readStored(repositoryId: string, revisionId: string): Promise<FactSnapshot> {
+    const row = await this.database
+      .selectFrom("revision_fact_snapshots")
+      .select(["entities", "relationships"])
+      .where("repository_id", "=", repositoryId)
+      .where("revision_id", "=", revisionId)
+      .executeTakeFirst();
+    if (row === undefined)
+      throw new Error(`Fact snapshot for revision ${revisionId} is unavailable`);
+    return {
+      entities: row.entities as unknown as readonly SnapshotEntity[],
+      relationships: row.relationships as unknown as readonly SnapshotRelationship[],
+      repositoryId,
+      revisionId,
+    };
+  }
 }

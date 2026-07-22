@@ -6,6 +6,7 @@ import {
   documentationApplySchema,
   graphNeighborhoodSchema,
   registerRepositorySchema,
+  triggerScanSchema,
   type RepositoryOverviewResponse,
 } from "./product-api.js";
 
@@ -27,6 +28,13 @@ describe("product API contracts", () => {
   it("rejects empty repository paths and low-information questions", () => {
     expect(() => registerRepositorySchema.parse({ rootPath: " " })).toThrow();
     expect(() => askQuestionSchema.parse({ question: "?" })).toThrow();
+  });
+
+  it("allows the server to capture the current scan target", () => {
+    expect(triggerScanSchema.parse({})).toEqual({});
+    expect(
+      triggerScanSchema.parse({ commitSha: "abc123", worktreeFingerprint: "fingerprint" }),
+    ).toEqual({ commitSha: "abc123", worktreeFingerprint: "fingerprint" });
   });
 
   it("requires explicit acceptance before applying documentation", () => {
@@ -60,6 +68,12 @@ describe("product API contracts", () => {
     } satisfies RepositoryOverviewResponse;
 
     expect(overview.selectedTraversalAdapter).toBe("postgresql");
-    expect(Object.keys(overview.capabilities)).not.toContain("neo4j");
+    expect(Object.keys(overview.capabilities).sort()).toEqual([
+      "analysis",
+      "canonical",
+      "ollama",
+      "semantic",
+      "worker",
+    ]);
   });
 });

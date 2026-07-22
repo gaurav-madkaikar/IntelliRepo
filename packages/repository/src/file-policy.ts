@@ -8,6 +8,9 @@ export interface FilePolicyInput {
   readonly sizeBytes: number;
 }
 
+export type FilePolicyRejectionReason =
+  "binary" | "environment-secret" | "generated" | "oversized" | "unsupported";
+
 export type FilePolicyDecision =
   | Readonly<{
       artifactKind: ArtifactKind;
@@ -17,9 +20,11 @@ export type FilePolicyDecision =
     }>
   | Readonly<{
       normalizedPath: string;
-      reason: "binary" | "environment-secret" | "generated" | "oversized" | "unsupported";
+      reason: FilePolicyRejectionReason;
       supported: false;
     }>;
+
+export type SupportedFilePolicyDecision = Extract<FilePolicyDecision, { supported: true }>;
 
 const generatedSegments = new Set([
   ".gradle",

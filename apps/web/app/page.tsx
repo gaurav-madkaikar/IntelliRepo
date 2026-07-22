@@ -34,7 +34,10 @@ export default function HomePage() {
             intelligence layer—without requiring your code to leave the machine.
           </p>
           <Link className="primary-cta" href={`/repositories/${demoRepository.id}/overview`}>
-            OPEN CONTROL ROOM <span>→</span>
+            OPEN LIVE CONTROL ROOM <span>→</span>
+          </Link>
+          <Link className="secondary-cta" href="/demo">
+            VIEW FIXTURE WALKTHROUGH ↗
           </Link>
         </div>
         <div className="landing-terminal">
@@ -50,7 +53,7 @@ export default function HomePage() {
       <footer>
         <span>POSTGRESQL CANONICAL</span>
         <span>PGVECTOR SELECTIVE</span>
-        <span>NEO4J OPTIONAL</span>
+        <span>POSTGRESQL TRAVERSAL</span>
         <span>OLLAMA LOCAL</span>
       </footer>
     </main>

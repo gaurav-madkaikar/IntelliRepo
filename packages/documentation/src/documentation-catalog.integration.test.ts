@@ -66,6 +66,23 @@ describeWithDocker("documentation catalog integration", () => {
     await catalog.saveReview(review);
     await catalog.saveReview(review);
 
+    const reloaded = await catalog.findReview(snapshot.repositoryId, review.id);
+    expect(reloaded).toMatchObject({
+      preview: {
+        manifest: review.manifest,
+        originalChecksum: review.originalChecksum,
+        path: review.path,
+      },
+      state: "pending",
+    });
+    expect(await catalog.claimReview(snapshot.repositoryId, review.id, snapshot.revisionId)).toBe(
+      true,
+    );
+    expect(await catalog.claimReview(snapshot.repositoryId, review.id, snapshot.revisionId)).toBe(
+      false,
+    );
+    await catalog.markReviewApplied(snapshot.repositoryId, review.id);
+
     expect(await catalog.findHealth(snapshot.repositoryId, snapshot.revisionId)).toMatchObject({
       score: 100,
     });

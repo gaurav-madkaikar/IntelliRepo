@@ -1,5 +1,7 @@
 # IntelliRepo Portfolio Vertical Slice Implementation Plan
 
+> Historical plan: the approved 2026-07-21 runtime integration design supersedes this document's optional Neo4j projection tasks. The implemented portfolio slice uses PostgreSQL for canonical storage and traversal, with pgvector in the same database and no Neo4j runtime or adapter.
+
 **Design baseline:** `docs/superpowers/specs/2026-07-15-intellirepo-portfolio-vertical-slice-design.md`
 
 **Architecture revision:** 2026-07-16

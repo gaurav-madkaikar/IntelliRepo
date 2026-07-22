@@ -21,6 +21,10 @@ const environmentSchema = z.object({
     .default("postgresql://intellirepo:intellirepo@localhost:5432/intellirepo"),
   GRAPH_QUERY_MAX_DEPTH: positiveInteger.max(12).default(4),
   GRAPH_QUERY_MAX_NODES: positiveInteger.max(10_000).default(200),
+  GITHUB_TOKEN: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   INDEXING_MODE: z.enum(["bullmq", "inline"]).default("bullmq"),
   MAX_FILE_BYTES: positiveInteger.default(1_048_576),
   MAX_REPOSITORY_FILES: positiveInteger.max(100_000).default(5_000),
@@ -51,6 +55,7 @@ export interface ApplicationConfig {
   readonly databaseUrl: string;
   readonly graphQueryMaxDepth: number;
   readonly graphQueryMaxNodes: number;
+  readonly githubToken?: string;
   readonly indexingMode: "bullmq" | "inline";
   readonly maxFileBytes: number;
   readonly maxRepositoryFiles: number;
@@ -98,6 +103,7 @@ export function loadApplicationConfig(
     databaseUrl: parsed.DATABASE_URL,
     graphQueryMaxDepth: parsed.GRAPH_QUERY_MAX_DEPTH,
     graphQueryMaxNodes: parsed.GRAPH_QUERY_MAX_NODES,
+    ...(parsed.GITHUB_TOKEN === undefined ? {} : { githubToken: parsed.GITHUB_TOKEN }),
     indexingMode: parsed.INDEXING_MODE,
     maxFileBytes: parsed.MAX_FILE_BYTES,
     maxRepositoryFiles: parsed.MAX_REPOSITORY_FILES,

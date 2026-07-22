@@ -40,7 +40,10 @@ export class OllamaClient {
     this.retryCount = options.retryCount ?? 1;
   }
 
-  public post<T>(endpoint: string, body: Readonly<Record<string, unknown>>): Promise<T> {
+  private request<T>(
+    endpoint: string,
+    init: Readonly<{ body?: Readonly<Record<string, unknown>>; method: "GET" | "POST" }>,
+  ): Promise<T> {
     return this.gate.run(async () => {
       let lastError: unknown;
       for (let attempt = 0; attempt <= this.retryCount; attempt += 1) {
@@ -48,9 +51,9 @@ export class OllamaClient {
         const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
         try {
           const response = await this.fetchImplementation(new URL(endpoint, this.options.baseUrl), {
-            body: JSON.stringify(body),
-            headers: { "content-type": "application/json" },
-            method: "POST",
+            ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+            ...(init.body === undefined ? {} : { headers: { "content-type": "application/json" } }),
+            method: init.method,
             signal: controller.signal,
           });
           if (!response.ok) {
@@ -68,5 +71,13 @@ export class OllamaClient {
         `Ollama request failed after ${this.retryCount + 1} attempt(s): ${lastError instanceof Error ? lastError.message : String(lastError)}`,
       );
     });
+  }
+
+  public get<T>(endpoint: string): Promise<T> {
+    return this.request(endpoint, { method: "GET" });
+  }
+
+  public post<T>(endpoint: string, body: Readonly<Record<string, unknown>>): Promise<T> {
+    return this.request(endpoint, { body, method: "POST" });
   }
 }

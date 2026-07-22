@@ -389,15 +389,15 @@ describeWithDocker("catalog integration", () => {
     const catalog = new ProjectionStateCatalog(handle.database);
 
     await catalog.save({
-      error: { message: "Neo4j unavailable", recoverable: true },
-      projection: "neo4j",
+      error: { message: "Embedding endpoint unavailable", recoverable: true },
+      projection: "semantic",
       repositoryId: seed.repositoryId,
       revisionId: seed.revisionId,
       state: "delayed",
     });
 
-    await expect(catalog.find(seed.repositoryId, "neo4j")).resolves.toMatchObject({
-      error: { message: "Neo4j unavailable", recoverable: true },
+    await expect(catalog.find(seed.repositoryId, "semantic")).resolves.toMatchObject({
+      error: { message: "Embedding endpoint unavailable", recoverable: true },
       revision_id: seed.revisionId,
       state: "delayed",
     });

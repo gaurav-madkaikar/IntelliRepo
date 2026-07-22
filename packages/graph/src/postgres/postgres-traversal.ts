@@ -11,10 +11,6 @@ import {
   traversalDirection,
   validateTraversalQuery,
 } from "../traversal.js";
-import type {
-  CanonicalGraphSnapshot,
-  CanonicalGraphSnapshotSource,
-} from "../neo4j/neo4j-projector.js";
 
 export interface AdjacentGraphSlice {
   readonly edges: readonly GraphEdge[];
@@ -131,38 +127,6 @@ export class PostgresCanonicalGraphReader implements CanonicalGraphReader {
             .where("id", "in", adjacentIds)
             .execute();
     return { edges, nodes: nodes.map(graphNode) };
-  }
-}
-
-/** Loads the canonical current graph for a rebuildable projection. */
-export class PostgresGraphSnapshotSource implements CanonicalGraphSnapshotSource {
-  public constructor(private readonly database: Kysely<CatalogDatabase>) {}
-
-  public async load(repositoryId: string, revisionId: string): Promise<CanonicalGraphSnapshot> {
-    const reader = new PostgresCanonicalGraphReader(this.database);
-    await reader.assertCurrentRevision(repositoryId, revisionId);
-    const entityRows = await this.database
-      .selectFrom("entities")
-      .select(["attributes", "id", "kind", "name", "qualified_name", "stable_key"])
-      .where("repository_id", "=", repositoryId)
-      .execute();
-    const relationshipRows = await this.database
-      .selectFrom("relationships")
-      .select(["attributes", "id", "kind", "source_entity_id", "target_entity_id"])
-      .where("repository_id", "=", repositoryId)
-      .execute();
-    return {
-      edges: relationshipRows.map((row) => ({
-        attributes: row.attributes,
-        id: row.id,
-        kind: row.kind,
-        sourceId: row.source_entity_id,
-        targetId: row.target_entity_id,
-      })),
-      nodes: entityRows.map(graphNode),
-      repositoryId,
-      revisionId,
-    };
   }
 }
 

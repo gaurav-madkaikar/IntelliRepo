@@ -1,38 +1,56 @@
 "use client";
 
 import { useState } from "react";
+import type { QuestionTaskResponse } from "@intellirepo/contracts";
+import type { RepositoryAnswer } from "@intellirepo/qa";
 
-import { answer } from "../lib/demo-data";
+import { ProductApiClient } from "../lib/product-api";
 import { Confidence, Panel, PanelHeader, SourceRef } from "./ui";
 
-export function AskConsole() {
+const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+export function AskConsole({ repositoryId }: { readonly repositoryId: string }) {
   const [question, setQuestion] = useState("What happens when a user logs in?");
-  const [submitted, setSubmitted] = useState(true);
+  const [task, setTask] = useState<QuestionTaskResponse<RepositoryAnswer>>();
+  const [error, setError] = useState<string>();
+
+  const ask = async (): Promise<void> => {
+    setError(undefined);
+    try {
+      const client = new ProductApiClient();
+      let current = (await client.submitQuestion(repositoryId, {
+        question,
+      })) as QuestionTaskResponse<RepositoryAnswer>;
+      setTask(current);
+      for (
+        let attempt = 0;
+        attempt < 120 && (current.state === "queued" || current.state === "running");
+        attempt += 1
+      ) {
+        await delay(500);
+        current = (await client.question(
+          repositoryId,
+          current.id,
+        )) as QuestionTaskResponse<RepositoryAnswer>;
+        setTask(current);
+      }
+      if (current.state === "failed") setError(current.error ?? "Question failed");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Question request failed");
+    }
+  };
+  const answer = task?.result;
   return (
-    <div className="ask-layout">
+    <div className="ask-layout live-ask-layout">
       <Panel className="question-history">
-        <PanelHeader eyebrow="SESSION" title="Recent questions" />
-        <button className="history-item active" type="button">
-          <span>Q</span>
-          <div>
-            <strong>What happens when a user logs in?</strong>
-            <small>endpoint_flow · now</small>
-          </div>
-        </button>
-        <button className="history-item" type="button">
-          <span>Q</span>
-          <div>
-            <strong>Where is JWT expiration configured?</strong>
-            <small>configuration_usage · 4m</small>
-          </div>
-        </button>
-        <button className="history-item" type="button">
-          <span>Q</span>
-          <div>
-            <strong>Which tests cover AuthService?</strong>
-            <small>test_impact · 7m</small>
-          </div>
-        </button>
+        <PanelHeader eyebrow="DURABLE TASK" title="Current request" />
+        <div className="task-state">
+          <span
+            className={`status-dot status-${task?.state === "failed" ? "failed" : task?.state === "succeeded" ? "current" : "stale"}`}
+          />
+          <strong>{task?.state ?? "not submitted"}</strong>
+          <code>{task?.id ?? "—"}</code>
+        </div>
       </Panel>
       <div className="conversation">
         <Panel className="answer-panel">
@@ -40,43 +58,48 @@ export function AskConsole() {
             <span>YOU</span>
             <p>{question}</p>
           </div>
-          {submitted ? (
+          {answer === undefined ? (
+            <div className="empty-answer">
+              {error ?? "Submit the question to retrieve revision-scoped evidence."}
+            </div>
+          ) : (
             <div className="answer-block">
               <div className="answer-meta">
                 <span>INTELLIREPO</span>
                 <Confidence level={answer.confidence} />
-                <b>DETERMINISTIC MODE</b>
+                {answer.degraded ? <b>DEGRADED</b> : <b>HYBRID</b>}
               </div>
-              <p>{answer.text}</p>
+              <p>{answer.answer}</p>
               <div className="evidence-pack">
                 <div>
                   <span>EVIDENCE PACK</span>
-                  <strong>3 references · 5 nodes · PostgreSQL</strong>
+                  <strong>
+                    {answer.citations.length} references · {answer.evidence.nodes.length} nodes ·{" "}
+                    {answer.evidence.adapter ?? "semantic"}
+                  </strong>
                 </div>
-                {answer.citations.map(([id, path, evidence]) => (
-                  <article key={id}>
-                    <b>{id}</b>
+                {answer.citations.map((citation) => (
+                  <article key={citation.id}>
+                    <b>{citation.id}</b>
                     <div>
-                      <SourceRef>{path}</SourceRef>
-                      <p>{evidence}</p>
+                      <SourceRef>
+                        {citation.path}
+                        {citation.startLine === undefined ? "" : `:${citation.startLine}`}
+                      </SourceRef>
+                      <p>{citation.evidence}</p>
                     </div>
                   </article>
                 ))}
               </div>
-              <div className="degraded-banner">
-                <span>!</span>
-                <div>
-                  <strong>Natural-language synthesis unavailable</strong>
-                  <p>
-                    Ollama is offline. This response was rendered from confirmed structural
-                    evidence; semantic-only recall is unavailable.
-                  </p>
+              {answer.degradedReasons.length > 0 ? (
+                <div className="degraded-banner">
+                  <span>!</span>
+                  <div>
+                    <strong>Capability degradation</strong>
+                    <p>{answer.degradedReasons.join(" · ")}</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-answer">
-              Submit the question to retrieve revision-scoped evidence.
+              ) : null}
             </div>
           )}
         </Panel>
@@ -84,20 +107,19 @@ export function AskConsole() {
           className="ask-box"
           onSubmit={(event) => {
             event.preventDefault();
-            setSubmitted(true);
+            void ask();
           }}
         >
           <textarea
             aria-label="Ask about this repository"
-            onChange={(event) => {
-              setQuestion(event.target.value);
-              setSubmitted(false);
-            }}
+            onChange={(event) => setQuestion(event.target.value)}
             value={question}
           />
           <div>
-            <span>REVISION 9f2c71a · LOCAL ONLY</span>
-            <button type="submit">ASK INTELLIREPO ↗</button>
+            <span>ACTIVE CANONICAL REVISION · LOCAL ONLY</span>
+            <button disabled={task?.state === "queued" || task?.state === "running"} type="submit">
+              ASK INTELLIREPO ↗
+            </button>
           </div>
         </form>
       </div>

@@ -61,16 +61,30 @@ export class SemanticProjector {
     }
     const existing = await this.store.list(input.repositoryId);
     const existingById = new Map(existing.map((chunk) => [chunk.id, chunk]));
-    const changed = chunks.filter(
-      (chunk) => existingById.get(chunk.id)?.checksum !== chunk.checksum,
-    );
+    let modelIdentity: string;
+    try {
+      modelIdentity = (await this.embedder.embed([])).model;
+    } catch (error) {
+      return this.complete(input, {
+        embedded: 0,
+        eligible: chunks.length,
+        removed: 0,
+        retained: 0,
+        state: "degraded",
+        statusReason: `Embedding model unavailable; previous semantic projection retained: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    const changed = chunks.filter((chunk) => {
+      const previous = existingById.get(chunk.id);
+      return previous?.checksum !== chunk.checksum || previous.embeddingModel !== modelIdentity;
+    });
     const retained = chunks.length - changed.length;
     let batch: Awaited<ReturnType<Embedder["embed"]>>;
     if (changed.length === 0) {
       batch = {
         model:
           existing.find(({ embeddingModel }) => embeddingModel !== undefined)?.embeddingModel ??
-          "retained",
+          modelIdentity,
         vectors: [],
       };
     } else {
@@ -96,6 +110,8 @@ export class SemanticProjector {
       vector: batch.vectors[index] as readonly number[],
     }));
     await this.store.upsert(input.repositoryId, stored);
+    const retainedIds = chunks.filter((chunk) => !changed.includes(chunk)).map(({ id }) => id);
+    await this.store.retag(input.repositoryId, retainedIds, input.revisionId);
 
     const activeIds = new Set(chunks.map(({ id }) => id));
     const updatedParents = new Set(input.sources.map(({ sourceId }) => sourceId));

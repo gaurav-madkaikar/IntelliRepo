@@ -61,11 +61,19 @@ export function createSemanticChunks(
       ...(source.endLine === undefined ? {} : { endLine: source.endLine }),
       id: `semantic:${hash(source.sourceKind, sourceId).slice(0, 24)}`,
       metadata: {
+        ...(source.metadata ?? {}),
+        artifactId: source.artifactId ?? "unknown",
+        chunkKind:
+          source.chunkKind ??
+          (source.sourceKind === "documentation" ? "documentation-section" : "source-region"),
+        contentHash: source.contentHash ?? hash(source.content),
         eligibilityReason,
         language: source.language ?? "unknown",
         parentSourceId: source.sourceId,
         path: source.path,
         redactionCount: redacted.redactionCount,
+        repositoryId: source.repositoryId ?? "unknown",
+        revisionId: source.revisionId ?? "unknown",
       },
       sourceId,
       sourceKind: source.sourceKind,

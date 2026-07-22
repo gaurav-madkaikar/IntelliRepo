@@ -16,6 +16,7 @@ import {
   documentationPreviewSchema,
   entitySearchSchema,
   graphNeighborhoodSchema,
+  githubPullRequestAnalysisSchema,
   registerRepositorySchema,
   revisionPairSchema,
   triggerScanSchema,
@@ -186,6 +187,22 @@ export class DiagnosticsController {
   }
 }
 
+@ApiTags("github")
+@Controller("repositories/:repositoryId/github/pull-requests")
+export class GitHubPullRequestsController {
+  public constructor(@Inject(PRODUCT_FACADE) private readonly facade: ProductFacade) {}
+
+  @Post("analyze")
+  @ApiOperation({ summary: "Analyze indexed base/head revisions for a GitHub pull request" })
+  @ApiBody({ schema: openApiSchema(githubPullRequestAnalysisSchema) })
+  public analyze(@Param("repositoryId") repositoryId: string, @Body() body: unknown) {
+    return this.facade.analyzeGitHubPullRequest(
+      repositoryId,
+      parse(githubPullRequestAnalysisSchema, body),
+    );
+  }
+}
+
 export const PRODUCT_CONTROLLERS = [
   RepositoriesController,
   OverviewController,
@@ -196,4 +213,5 @@ export const PRODUCT_CONTROLLERS = [
   DocumentationController,
   QuestionsController,
   DiagnosticsController,
+  GitHubPullRequestsController,
 ] as const;

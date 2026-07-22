@@ -52,6 +52,14 @@ export interface RevisionTable {
   worktree_fingerprint: string;
 }
 
+export interface RevisionFactSnapshotTable {
+  captured_at: Timestamp;
+  entities: JsonArray;
+  relationships: JsonArray;
+  repository_id: string;
+  revision_id: string;
+}
+
 export interface SourceArtifactTable {
   active_revision_id: string | null;
   artifact_kind: string;
@@ -349,6 +357,7 @@ export interface CatalogDatabase {
   relationships: RelationshipTable;
   repositories: RepositoryTable;
   revisions: RevisionTable;
+  revision_fact_snapshots: RevisionFactSnapshotTable;
   risk_factors: RiskFactorTable;
   scan_jobs: ScanJobTable;
   semantic_chunks: SemanticChunkTable;

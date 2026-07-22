@@ -24,14 +24,29 @@ class MemoryChunkStore implements SemanticChunkStore {
     return Promise.resolve([...(this.chunks.get(repositoryId) ?? new Map()).values()]);
   }
 
+  public retag(
+    repositoryId: string,
+    chunkIds: readonly string[],
+    revisionId: string,
+  ): Promise<void> {
+    const repository = this.chunks.get(repositoryId);
+    for (const id of chunkIds) {
+      const chunk = repository?.get(id);
+      if (chunk !== undefined) repository?.set(id, { ...chunk, revisionId });
+    }
+    return Promise.resolve();
+  }
+
   public search(
     repositoryId: string,
     _vector: readonly number[],
     limit: number,
+    revisionId?: string,
   ): Promise<readonly SemanticSearchResult[]> {
     this.searches.push(repositoryId);
     return Promise.resolve(
       [...(this.chunks.get(repositoryId) ?? new Map()).values()]
+        .filter((chunk) => revisionId === undefined || chunk.revisionId === revisionId)
         .slice(0, limit)
         .map((chunk) => ({ chunk, similarity: 0.9 })),
     );
@@ -121,9 +136,29 @@ describe("selective semantic chunks", () => {
       sources: [{ ...firstSource, content: `${firstSource.content}\n// Token refresh behavior.` }],
     });
 
-    expect(seen).toHaveLength(2);
-    expect(seen[0]?.join(" ")).not.toContain("super-secret");
-    expect(seen[1]).toHaveLength(1);
+    expect(seen).toHaveLength(5);
+    expect(seen[1]?.join(" ")).not.toContain("super-secret");
+    expect(seen[4]).toHaveLength(1);
+    expect([...(store.chunks.get("repo-a") ?? new Map()).values()][0]?.revisionId).toBe("r3");
+  });
+
+  it("re-embeds unchanged content when the configured model changes", async () => {
+    const store = new MemoryChunkStore();
+    let model = "model-a";
+    const embedder: Embedder = {
+      embed: (input) =>
+        Promise.resolve({ model, vectors: input.map(() => [model === "model-a" ? 1 : 2]) }),
+    };
+    const projector = new SemanticProjector(store, embedder);
+    const useful = source(
+      "// Authentication behavior and validation details\nexport function authenticate() { return validateCredentials(); }",
+    );
+    await projector.project({ repositoryId: "repo", revisionId: "r1", sources: [useful] });
+    model = "model-b";
+
+    await expect(
+      projector.project({ repositoryId: "repo", revisionId: "r2", sources: [useful] }),
+    ).resolves.toMatchObject({ embedded: 1, model: "model-b", retained: 0 });
   });
 
   it("keeps semantic retrieval repository scoped", async () => {
@@ -154,7 +189,7 @@ describe("selective semantic chunks", () => {
     const embedder = {
       embed: vi.fn(() => Promise.resolve({ model: "fixture", vectors: [[1, 0]] })),
     };
-    const results = await new SemanticRetriever(store, embedder).search("repo-a", "alpha");
+    const results = await new SemanticRetriever(store, embedder).search("repo-a", "alpha", 8, "r1");
 
     expect(store.searches).toEqual(["repo-a"]);
     expect(results).toHaveLength(1);

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { RepositoryOverviewResponse } from "@intellirepo/contracts";
 
-import { capabilityData, demoRepository } from "../lib/demo-data";
 import { StatusDot } from "./ui";
 
 const navigation = [
@@ -15,13 +15,24 @@ const navigation = [
 
 export function RepositoryShell({
   children,
-  dataMode,
+  overview,
   repositoryId,
 }: {
   readonly children: ReactNode;
-  readonly dataMode: "live" | "portfolio";
+  readonly overview?: RepositoryOverviewResponse;
   readonly repositoryId: string;
 }) {
+  const repositoryName = overview?.repository.displayName ?? repositoryId;
+  const capabilities =
+    overview === undefined
+      ? []
+      : ([
+          ["PostgreSQL", overview.capabilities.canonical],
+          ["pgvector", overview.capabilities.semantic],
+          ["Analysis", overview.capabilities.analysis],
+          ["Ollama", overview.capabilities.ollama],
+          ["Dispatch", overview.capabilities.worker],
+        ] as const);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -33,9 +44,10 @@ export function RepositoryShell({
         </Link>
         <div className="repo-switcher">
           <span className="micro-label">Active repository</span>
-          <strong>{demoRepository.name}</strong>
+          <strong>{repositoryName}</strong>
           <span>
-            {demoRepository.branch} · {demoRepository.revision}
+            {overview?.repository.defaultBranch ?? "unregistered"} ·{" "}
+            {overview?.revision?.commitSha.slice(0, 8) ?? "no active revision"}
           </span>
         </div>
         <nav aria-label="Repository navigation">
@@ -48,11 +60,11 @@ export function RepositoryShell({
         </nav>
         <div className="sidebar-status">
           <span className="micro-label">System matrix</span>
-          {capabilityData.map((item) => (
-            <div key={item.label}>
-              <StatusDot state={item.state} />
-              <span>{item.label}</span>
-              <small>{item.lag}</small>
+          {capabilities.map(([label, capability]) => (
+            <div key={label}>
+              <StatusDot state={capability.state} />
+              <span>{label}</span>
+              <small>{capability.lagRevisions} rev</small>
             </div>
           ))}
         </div>
@@ -69,11 +81,11 @@ export function RepositoryShell({
           <div className="breadcrumb">
             <span>REPOSITORIES</span>
             <b>/</b>
-            <strong>{demoRepository.name}</strong>
+            <strong>{repositoryName}</strong>
           </div>
           <div className="top-actions">
-            <span className={`demo-chip data-${dataMode}`}>
-              {dataMode === "live" ? "LIVE API" : "PORTFOLIO FALLBACK"}
+            <span className={`demo-chip data-${overview === undefined ? "error" : "live"}`}>
+              {overview === undefined ? "LIVE API ERROR" : "LIVE API"}
             </span>
             <button type="button">⌘ K</button>
             <div className="avatar">GM</div>

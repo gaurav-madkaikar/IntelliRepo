@@ -9,7 +9,12 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "demo:apply-change": "tsx scripts/demo/apply-change.ts",
+    "demo:reset": "tsx scripts/demo/reset.ts",
+    "demo:setup": "tsx scripts/demo/setup.ts",
     "dev": "turbo run dev --parallel",
+    "infra:down": "podman compose down",
+    "infra:up": "podman compose up -d postgres redis",
     "doctor": "pnpm --filter @intellirepo/contracts doctor",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -17,7 +22,7 @@
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "turbo run test:e2e",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "node scripts/test-integration.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "devDependencies": {

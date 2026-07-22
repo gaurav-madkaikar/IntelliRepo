@@ -27,11 +27,11 @@ The result must let a user register a medium-sized local repository, start an in
 - Live dashboard data for repository overview, scan progress, graph exploration, documentation health, impact, Q&A, and runtime capabilities.
 - Explicit fixture-backed demo routes that cannot be confused with live repository routes.
 - Integration and end-to-end verification for initial scans, small incremental changes, degraded Ollama behavior, and both dispatch modes.
+- Optional GitHub PR metadata ingestion and idempotent impact-comment publication for base/head commits that are already indexed locally.
 
 ### Excluded
 
 - Neo4j storage, projection, traversal, configuration, health reporting, and benchmarks.
-- GitHub pull request ingestion or comment publication.
 - Generated documentation pull requests.
 - Production deployment hardening, distributed tracing, long-term metrics retention, and hosted multi-tenancy.
 - Embedding every entity or relationship.
