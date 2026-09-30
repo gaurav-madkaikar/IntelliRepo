@@ -36,7 +36,7 @@ export class ProductApiClient {
       ...init,
       cache: "no-store",
       headers: { "content-type": "application/json", ...init?.headers },
-      signal: AbortSignal.timeout(1_000),
+      signal: AbortSignal.timeout(init?.method === "POST" ? 15_000 : 5_000),
     });
     if (!response.ok) throw new Error(`IntelliRepo API returned ${response.status} for ${path}`);
     return response.json() as Promise<T>;
@@ -118,16 +118,16 @@ export class ProductApiClient {
   }
 }
 
-export type DashboardDataMode =
-  | { readonly mode: "live"; readonly overview: RepositoryOverviewResponse }
-  | { readonly mode: "portfolio"; readonly reason: string };
+export type LiveDashboardData =
+  | { readonly mode: "error"; readonly reason: string }
+  | { readonly mode: "live"; readonly overview: RepositoryOverviewResponse };
 
-export async function loadDashboardData(repositoryId: string): Promise<DashboardDataMode> {
+export async function loadDashboardData(repositoryId: string): Promise<LiveDashboardData> {
   try {
     return { mode: "live", overview: await new ProductApiClient().overview(repositoryId) };
   } catch (error) {
     return {
-      mode: "portfolio",
+      mode: "error",
       reason: error instanceof Error ? error.message : "Product API unavailable",
     };
   }

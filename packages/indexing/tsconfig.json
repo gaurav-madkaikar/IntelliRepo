@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/indexing.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../ai" },
+    { "path": "../catalog" },
+    { "path": "../contracts" },
+    { "path": "../domain" },
+    { "path": "../documentation" },
+    { "path": "../embeddings" },
+    { "path": "../graph" },
+    { "path": "../impact" },
+    { "path": "../parsing" },
+    { "path": "../repository" },
+    { "path": "../testkit" }
+  ]
+}

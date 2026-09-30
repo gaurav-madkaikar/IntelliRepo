@@ -71,6 +71,8 @@ describeWithDocker("PostgreSQL pgvector semantic retrieval", () => {
     const results = await new SemanticRetriever(store, embedder).search(
       "repository-a",
       "authentication",
+      8,
+      "revision-a",
     );
     expect(results).toHaveLength(1);
     expect(results[0]?.chunk.metadata.path).toBe("src/auth-a.ts");

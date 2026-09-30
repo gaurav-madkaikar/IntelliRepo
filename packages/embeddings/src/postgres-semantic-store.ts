@@ -83,6 +83,20 @@ export class PostgresSemanticChunkStore implements SemanticChunkStore {
     });
   }
 
+  public async retag(
+    repositoryId: string,
+    chunkIds: readonly string[],
+    revisionId: string,
+  ): Promise<void> {
+    if (chunkIds.length === 0) return;
+    await this.database
+      .updateTable("semantic_chunks")
+      .set({ revision_id: revisionId })
+      .where("repository_id", "=", repositoryId)
+      .where("id", "in", [...chunkIds])
+      .execute();
+  }
+
   public async delete(repositoryId: string, chunkIds: readonly string[]): Promise<void> {
     if (chunkIds.length === 0) return;
     await this.database
@@ -96,6 +110,7 @@ export class PostgresSemanticChunkStore implements SemanticChunkStore {
     repositoryId: string,
     vector: readonly number[],
     limit: number,
+    revisionId?: string,
   ): Promise<readonly SemanticSearchResult[]> {
     const queryVector = sql.raw(vectorLiteral(vector));
     const result = await sql<{
@@ -111,7 +126,9 @@ export class PostgresSemanticChunkStore implements SemanticChunkStore {
       SELECT id, revision_id, source_kind, source_id, checksum, redacted_content, metadata,
              1 - (embedding <=> ${queryVector}) AS similarity
       FROM semantic_chunks
-      WHERE repository_id = ${repositoryId} AND embedding IS NOT NULL
+      WHERE repository_id = ${repositoryId}
+        AND embedding IS NOT NULL
+        AND (${revisionId ?? null}::text IS NULL OR revision_id = ${revisionId ?? null})
       ORDER BY embedding <=> ${queryVector}
       LIMIT ${limit}
     `.execute(this.database);

@@ -13,7 +13,10 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@intellirepo/ai": "workspace:*",
+    "@intellirepo/catalog": "workspace:*",
     "@intellirepo/contracts": "workspace:*",
+    "@intellirepo/indexing": "workspace:*",
     "@nestjs/common": "catalog:",
     "@nestjs/core": "catalog:",
     "bullmq": "catalog:",

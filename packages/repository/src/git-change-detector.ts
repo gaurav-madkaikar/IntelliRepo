@@ -26,6 +26,7 @@ export interface DetectGitChangesInput {
   readonly baseRevision: string;
   readonly repositoryId: string;
   readonly repositoryRoot: string;
+  readonly selectedCurrentPaths?: readonly string[];
   readonly targetRevision?: string;
 }
 
@@ -188,10 +189,42 @@ export class GitChangeDetector {
 
     const artifactChanges: ArtifactChange[] = [];
     const diagnostics: GitChangeDiagnostic[] = [];
+    const selectedCurrentPaths =
+      input.selectedCurrentPaths === undefined ? undefined : new Set(input.selectedCurrentPaths);
 
     for (const change of changes) {
       const policyPath = change.currentPath ?? change.previousPath;
       if (policyPath === undefined) {
+        continue;
+      }
+
+      if (
+        change.currentPath !== undefined &&
+        selectedCurrentPaths !== undefined &&
+        !selectedCurrentPaths.has(change.currentPath)
+      ) {
+        diagnostics.push({
+          path: change.currentPath,
+          reason: "Current artifact is outside the safe snapshot selection",
+        });
+        if (change.status !== "added" && change.previousPath !== undefined) {
+          const previousPolicy = this.filePolicy.evaluate({
+            path: change.previousPath,
+            sizeBytes: 0,
+          });
+          if (previousPolicy.supported) {
+            artifactChanges.push(
+              createArtifactChange({
+                kind: "deleted",
+                previous: await artifactState(
+                  input.repositoryRoot,
+                  input.baseRevision,
+                  change.previousPath,
+                ),
+              }),
+            );
+          }
+        }
         continue;
       }
       const policy = this.filePolicy.evaluate({ path: policyPath, sizeBytes: 0 });
@@ -267,8 +300,58 @@ export class GitChangeDetector {
 
   public async fingerprintWorkingTree(repositoryRoot: string): Promise<string> {
     const head = await runGitBuffer(repositoryRoot, ["rev-parse", "HEAD"]);
+    const trackedDiff = await runGitBuffer(repositoryRoot, ["diff", "--binary", "HEAD", "--"]);
+    const untrackedPaths = (
+      await runGitBuffer(repositoryRoot, ["ls-files", "-z", "--others", "--exclude-standard"])
+    )
+      .toString("utf8")
+      .split("\0")
+      .filter((path) => path.length > 0)
+      .sort();
+    const untrackedState: Buffer[] = [];
+    for (const path of untrackedPaths) {
+      const absolutePath = join(repositoryRoot, path);
+      try {
+        const stat = await fileSystem.lstat(absolutePath);
+        if (!stat.isFile()) {
+          untrackedState.push(Buffer.from(`${path}\0not-file\0`));
+          continue;
+        }
+        const file = await fileSystem.open(absolutePath, "r");
+        const prefix = new Uint8Array(Math.min(stat.size, 8_192));
+        try {
+          await file.read(prefix, 0, prefix.length, 0);
+        } finally {
+          await file.close();
+        }
+        const policy = this.filePolicy.evaluate({
+          contentPrefix: prefix,
+          path,
+          sizeBytes: stat.size,
+        });
+        if (!policy.supported) {
+          untrackedState.push(Buffer.from(`${path}\0${policy.reason}\0${stat.size}\0`));
+          continue;
+        }
+        untrackedState.push(
+          Buffer.from(`${path}\0${hash(await fileSystem.readFile(absolutePath))}\0`),
+        );
+      } catch (error) {
+        untrackedState.push(
+          Buffer.from(`${path}\0${error instanceof Error ? error.name : "unreadable"}\0`),
+        );
+      }
+    }
+    return hash(Buffer.concat([head, trackedDiff, ...untrackedState]));
+  }
+
+  public async headRevision(repositoryRoot: string): Promise<string> {
+    return (await runGitBuffer(repositoryRoot, ["rev-parse", "HEAD"])).toString("utf8").trim();
+  }
+
+  public async isWorkingTreeClean(repositoryRoot: string): Promise<boolean> {
     const status = await runGitBuffer(repositoryRoot, ["status", "--porcelain=v1", "-z"]);
-    return hash(Buffer.concat([head, status]));
+    return status.length === 0;
   }
 }
 

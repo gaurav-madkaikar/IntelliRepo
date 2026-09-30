@@ -6,7 +6,7 @@ import type {
   DocumentationFinding,
   DocumentationGap,
 } from "./documentation-model.js";
-import type { DocumentationReviewPreview } from "./generation-plan.js";
+import type { DocumentationManifest, DocumentationReviewPreview } from "./generation-plan.js";
 
 function jsonObject(value: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
@@ -40,6 +40,13 @@ export class DocumentationCatalog {
         .where("repository_id", "=", analysis.repositoryId)
         .where("revision_id", "=", analysis.revisionId)
         .execute();
+
+      const activePaths = analysis.pages.map(({ path }) => path);
+      let stalePages = transaction
+        .deleteFrom("document_pages")
+        .where("repository_id", "=", analysis.repositoryId);
+      if (activePaths.length > 0) stalePages = stalePages.where("path", "not in", activePaths);
+      await stalePages.execute();
 
       for (const page of analysis.pages) {
         await transaction
@@ -100,7 +107,7 @@ export class DocumentationCatalog {
           created_at: now,
           evidence: findingEvidence(finding),
           finding_kind: finding.kind,
-          id: finding.id,
+          id: `${finding.id}:${analysis.revisionId}`,
           repository_id: analysis.repositoryId,
           revision_id: analysis.revisionId,
           severity: finding.severity,
@@ -111,7 +118,7 @@ export class DocumentationCatalog {
           created_at: now,
           evidence: gapEvidence(gap),
           finding_kind: "missing_documentation",
-          id: gap.id,
+          id: `${gap.id}:${analysis.revisionId}`,
           repository_id: analysis.repositoryId,
           revision_id: analysis.revisionId,
           severity: gap.severity,
@@ -150,21 +157,91 @@ export class DocumentationCatalog {
         applied_at: null,
         created_at: new Date(),
         diff: review.diff,
+        explanation: jsonObject(review.enhancement),
         finding_id: null,
         id: review.id,
+        manifest: jsonObject(review.manifest),
+        original_checksum: review.originalChecksum,
         proposed_markdown: review.proposedMarkdown,
         repository_id: review.repositoryId,
+        request: {},
         revision_id: review.revisionId,
         state: "pending",
+        target_path: review.path,
       })
       .onConflict((conflict) =>
         conflict.column("id").doUpdateSet({
           diff: review.diff,
+          explanation: jsonObject(review.enhancement),
+          manifest: jsonObject(review.manifest),
+          original_checksum: review.originalChecksum,
           proposed_markdown: review.proposedMarkdown,
           state: "pending",
+          target_path: review.path,
         }),
       )
       .execute();
+  }
+
+  public async findReview(
+    repositoryId: string,
+    id: string,
+  ): Promise<{ readonly preview: DocumentationReviewPreview; readonly state: string } | undefined> {
+    const row = await this.database
+      .selectFrom("documentation_reviews")
+      .selectAll()
+      .where("repository_id", "=", repositoryId)
+      .where("id", "=", id)
+      .executeTakeFirst();
+    if (row === undefined) return undefined;
+    const enhancement = row.explanation as unknown as DocumentationReviewPreview["enhancement"];
+    return {
+      preview: {
+        diff: row.diff,
+        enhancement,
+        id: row.id,
+        manifest: row.manifest as unknown as DocumentationManifest,
+        originalChecksum: row.original_checksum,
+        path: row.target_path,
+        proposedMarkdown: row.proposed_markdown,
+        repositoryId: row.repository_id,
+        revisionId: row.revision_id,
+      },
+      state: row.state,
+    };
+  }
+
+  public async claimReview(repositoryId: string, id: string, revisionId: string): Promise<boolean> {
+    const changed = await this.database
+      .updateTable("documentation_reviews")
+      .set({ state: "applying" })
+      .where("repository_id", "=", repositoryId)
+      .where("revision_id", "=", revisionId)
+      .where("id", "=", id)
+      .where("state", "=", "pending")
+      .returning("id")
+      .executeTakeFirst();
+    return changed !== undefined;
+  }
+
+  public async releaseReview(repositoryId: string, id: string): Promise<void> {
+    await this.database
+      .updateTable("documentation_reviews")
+      .set({ state: "pending" })
+      .where("repository_id", "=", repositoryId)
+      .where("id", "=", id)
+      .where("state", "=", "applying")
+      .execute();
+  }
+
+  public async markReviewApplied(repositoryId: string, id: string): Promise<void> {
+    await this.database
+      .updateTable("documentation_reviews")
+      .set({ applied_at: new Date(), state: "applied" })
+      .where("repository_id", "=", repositoryId)
+      .where("id", "=", id)
+      .where("state", "=", "applying")
+      .executeTakeFirstOrThrow();
   }
 
   public findHealth(

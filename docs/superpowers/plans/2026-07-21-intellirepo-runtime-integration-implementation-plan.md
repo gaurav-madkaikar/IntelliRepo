@@ -6,6 +6,8 @@
 
 **Implementation rule:** PostgreSQL remains the only canonical and traversal database. No checkpoint may make deterministic indexing, graph exploration, impact, documentation analysis, or structural Q&A depend on Ollama. Neo4j is not composed into the runtime.
 
+**Post-plan extension:** The completed slice also includes an optional GitHub PR adapter. It accepts canonical GitHub PR URLs, requires locally indexed base/head revisions with matching commit SHAs, reuses the stored impact report, and creates or updates one marked PR comment only when explicitly requested. GitHub credentials remain runtime-only and local operation has no GitHub dependency.
+
 ## Checkpoint 1: Runtime contracts and configuration
 
 ### Task 1.1: Extend scan and capability contracts

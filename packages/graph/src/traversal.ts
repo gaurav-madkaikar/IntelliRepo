@@ -1,6 +1,6 @@
 export type TraversalMode = "affected-subgraph" | "endpoint-flow" | "neighborhood";
 export type TraversalDirection = "both" | "incoming" | "outgoing";
-export type TraversalAdapter = "neo4j" | "postgresql";
+export type TraversalAdapter = "postgresql";
 
 export interface GraphNode {
   readonly attributes: Readonly<Record<string, unknown>>;

@@ -9,7 +9,12 @@ export const demoRepository = {
 
 export const capabilityData = [
   { detail: "Canonical facts current", label: "PostgreSQL", lag: "0 rev", state: "current" },
-  { detail: "Optional projection disabled", label: "Neo4j", lag: "—", state: "disabled" },
+  {
+    detail: "Selected chunks match canonical facts",
+    label: "pgvector",
+    lag: "0",
+    state: "current",
+  },
   { detail: "Selected source chunks current", label: "pgvector", lag: "0 rev", state: "current" },
   { detail: "Deterministic mode active", label: "Ollama", lag: "—", state: "degraded" },
 ] as const;

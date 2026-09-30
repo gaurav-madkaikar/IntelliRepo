@@ -4,7 +4,11 @@ import { promises as fileSystem } from "node:fs";
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { FilePolicy, type FilePolicyDecision } from "./file-policy.js";
+import {
+  FilePolicy,
+  type FilePolicyRejectionReason,
+  type SupportedFilePolicyDecision,
+} from "./file-policy.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -16,19 +20,56 @@ export interface RegisteredLocalRepository {
 }
 
 export interface RepositoryArtifactCandidate {
-  readonly decision: FilePolicyDecision;
+  readonly decision: SupportedFilePolicyDecision;
   readonly path: string;
   readonly sizeBytes: number;
 }
 
+export type RepositoryInventoryDiagnosticReason =
+  | FilePolicyRejectionReason
+  | "ignored"
+  | "invalid-utf8"
+  | "missing"
+  | "not-file"
+  | "symlink-escape"
+  | "unreadable";
+
+export interface RepositoryInventoryDiagnostic {
+  readonly message: string;
+  readonly path: string;
+  readonly reason: RepositoryInventoryDiagnosticReason;
+  readonly sizeBytes?: number;
+}
+
 export interface RepositoryInventory {
   readonly artifacts: readonly RepositoryArtifactCandidate[];
-  readonly diagnostics: readonly RepositoryArtifactCandidate[];
+  readonly diagnostics: readonly RepositoryInventoryDiagnostic[];
+}
+
+export interface LoadedRepositoryArtifact extends RepositoryArtifactCandidate {
+  readonly content: string;
+  readonly contentHash: string;
+}
+
+export class RepositoryArtifactReadError extends Error {
+  public constructor(
+    public readonly artifactPath: string,
+    public readonly reason: RepositoryInventoryDiagnosticReason,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "RepositoryArtifactReadError";
+  }
 }
 
 function isWithinRoot(root: string, candidate: string): boolean {
   const relativePath = relative(root, candidate);
   return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+}
+
+function contentHash(content: Uint8Array): string {
+  return createHash("sha256").update(content).digest("hex");
 }
 
 async function runGit(rootPath: string, arguments_: readonly string[]): Promise<string> {
@@ -37,6 +78,34 @@ async function runGit(rootPath: string, arguments_: readonly string[]): Promise<
     maxBuffer: 16 * 1024 * 1024,
   });
   return stdout.trim();
+}
+
+function diagnostic(
+  path: string,
+  reason: RepositoryInventoryDiagnosticReason,
+  message: string,
+  sizeBytes?: number,
+): RepositoryInventoryDiagnostic {
+  return Object.freeze({
+    message,
+    path,
+    reason,
+    ...(sizeBytes === undefined ? {} : { sizeBytes }),
+  });
+}
+
+function readError(
+  path: string,
+  reason: RepositoryInventoryDiagnosticReason,
+  message: string,
+  cause?: unknown,
+): RepositoryArtifactReadError {
+  return new RepositoryArtifactReadError(
+    path,
+    reason,
+    `${path}: ${message}`,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export class LocalRepositoryAdapter {
@@ -89,18 +158,72 @@ export class LocalRepositoryAdapter {
 
   public async resolveArtifactPath(repositoryRoot: string, artifactPath: string): Promise<string> {
     if (isAbsolute(artifactPath)) {
-      throw new Error("Artifact path must be repository-relative");
+      throw readError(artifactPath, "symlink-escape", "artifact path must be repository-relative");
     }
 
     const rootPath = await fileSystem.realpath(repositoryRoot);
     const candidate = resolve(rootPath, artifactPath);
-    const realCandidate = await fileSystem.realpath(candidate);
+    let realCandidate: string;
+    try {
+      realCandidate = await fileSystem.realpath(candidate);
+    } catch (error) {
+      throw readError(artifactPath, "missing", "artifact cannot be resolved", error);
+    }
 
     if (!isWithinRoot(rootPath, realCandidate)) {
-      throw new Error(`Artifact symlink escapes repository root: ${artifactPath}`);
+      throw readError(artifactPath, "symlink-escape", "artifact symlink escapes repository root");
     }
 
     return realCandidate;
+  }
+
+  private async inspectArtifact(
+    repositoryRoot: string,
+    artifactPath: string,
+  ): Promise<RepositoryArtifactCandidate | RepositoryInventoryDiagnostic> {
+    let resolvedPath: string;
+    try {
+      resolvedPath = await this.resolveArtifactPath(repositoryRoot, artifactPath);
+    } catch (error) {
+      if (error instanceof RepositoryArtifactReadError) {
+        return diagnostic(artifactPath, error.reason, error.message);
+      }
+      return diagnostic(artifactPath, "unreadable", `${artifactPath}: artifact cannot be resolved`);
+    }
+
+    try {
+      const stat = await fileSystem.stat(resolvedPath);
+      if (!stat.isFile()) {
+        return diagnostic(artifactPath, "not-file", "Repository entry is not a regular file");
+      }
+      const file = await fileSystem.open(resolvedPath, "r");
+      const contentPrefix = new Uint8Array(Math.min(stat.size, 8_192));
+      try {
+        await file.read(contentPrefix, 0, contentPrefix.length, 0);
+      } finally {
+        await file.close();
+      }
+      const decision = this.filePolicy.evaluate({
+        contentPrefix,
+        path: artifactPath,
+        sizeBytes: stat.size,
+      });
+      if (!decision.supported) {
+        return diagnostic(
+          artifactPath,
+          decision.reason,
+          `File policy rejected ${artifactPath}: ${decision.reason}`,
+          stat.size,
+        );
+      }
+      return Object.freeze({ decision, path: artifactPath, sizeBytes: stat.size });
+    } catch (error) {
+      return diagnostic(
+        artifactPath,
+        "unreadable",
+        `${artifactPath}: ${error instanceof Error ? error.message : "artifact cannot be inspected"}`,
+      );
+    }
   }
 
   public async inventory(repositoryRoot: string): Promise<RepositoryInventory> {
@@ -113,32 +236,58 @@ export class LocalRepositoryAdapter {
       "--exclude-standard",
     ]);
     const paths = output.split("\0").filter((path) => path.length > 0);
-    const candidates: RepositoryArtifactCandidate[] = [];
+    const ignoredOutput = await runGit(rootPath, [
+      "ls-files",
+      "-z",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "--directory",
+      "--no-empty-directory",
+    ]);
+    const ignoredDiagnostics = ignoredOutput
+      .split("\0")
+      .filter((path) => path.length > 0)
+      .map((path) => diagnostic(path, "ignored", `Git ignore rules excluded ${path}`));
+    const inspected = await Promise.all(paths.map((path) => this.inspectArtifact(rootPath, path)));
+    const artifacts = inspected.filter(
+      (candidate): candidate is RepositoryArtifactCandidate => "decision" in candidate,
+    );
+    const diagnostics = inspected.filter(
+      (candidate): candidate is RepositoryInventoryDiagnostic => !("decision" in candidate),
+    );
 
-    for (const path of paths) {
-      try {
-        const resolvedPath = await this.resolveArtifactPath(rootPath, path);
-        const stat = await fileSystem.stat(resolvedPath);
-        const file = await fileSystem.open(resolvedPath, "r");
-        const contentPrefix = new Uint8Array(Math.min(stat.size, 8_192));
-        await file.read(contentPrefix, 0, contentPrefix.length, 0);
-        await file.close();
-        const decision = this.filePolicy.evaluate({
-          contentPrefix,
-          path,
-          sizeBytes: stat.size,
-        });
-        candidates.push({ decision, path, sizeBytes: stat.size });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Repository file cannot be inspected";
-        throw new Error(`${path}: ${message}`, { cause: error });
-      }
+    return Object.freeze({
+      artifacts: Object.freeze(artifacts),
+      diagnostics: Object.freeze([...diagnostics, ...ignoredDiagnostics]),
+    });
+  }
+
+  public async readArtifact(
+    repositoryRoot: string,
+    artifactPath: string,
+  ): Promise<LoadedRepositoryArtifact> {
+    const inspected = await this.inspectArtifact(repositoryRoot, artifactPath);
+    if (!("decision" in inspected)) {
+      throw readError(inspected.path, inspected.reason, inspected.message);
     }
-
-    return {
-      artifacts: candidates.filter(({ decision }) => decision.supported),
-      diagnostics: candidates.filter(({ decision }) => !decision.supported),
-    };
+    const resolvedPath = await this.resolveArtifactPath(repositoryRoot, artifactPath);
+    let bytes: Buffer;
+    try {
+      bytes = await fileSystem.readFile(resolvedPath);
+    } catch (error) {
+      throw readError(artifactPath, "unreadable", "artifact cannot be read", error);
+    }
+    let content: string;
+    try {
+      content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (error) {
+      throw readError(artifactPath, "invalid-utf8", "artifact is not valid UTF-8", error);
+    }
+    return Object.freeze({
+      ...inspected,
+      content,
+      contentHash: contentHash(bytes),
+    });
   }
 }

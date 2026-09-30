@@ -10,11 +10,15 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
+    { "path": "../../packages/ai" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/catalog" },
     { "path": "../../packages/repository" },
     { "path": "../../packages/graph" },
     { "path": "../../packages/documentation" },
-    { "path": "../../packages/qa" }
+    { "path": "../../packages/embeddings" },
+    { "path": "../../packages/indexing" },
+    { "path": "../../packages/qa" },
+    { "path": "../../packages/testkit" }
   ]
 }

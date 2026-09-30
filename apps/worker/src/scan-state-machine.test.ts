@@ -43,7 +43,7 @@ describe("scan state machine", () => {
       snapshot = completeCurrentStage(snapshot);
     }
     const beforeFailure = snapshot.completedStages;
-    snapshot = failCurrentStage(snapshot, "Neo4j unavailable", true);
+    snapshot = failCurrentStage(snapshot, "Semantic projection unavailable", true);
     snapshot = resumeScan(snapshot);
 
     expect(snapshot.attempt).toBe(2);

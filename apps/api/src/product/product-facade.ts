@@ -1,17 +1,16 @@
 import { randomUUID } from "node:crypto";
 
+import { OllamaClient, OllamaRuntime } from "@intellirepo/ai";
 import {
   createCatalogDatabase,
   migrateCatalogToLatest,
   ProjectionStateCatalog,
   RepositoryCatalog,
-  RevisionCatalog,
   ScanJobCatalog,
   type CatalogDatabase,
   type CatalogDatabaseHandle,
 } from "@intellirepo/catalog";
 import {
-  createScanJobId,
   type ApplicationConfig,
   type AskQuestionRequest,
   type ChangeImpactResponse,
@@ -23,6 +22,8 @@ import {
   type EntitySearchResult,
   type GraphNeighborhoodRequest,
   type GraphNeighborhoodResponse,
+  type GitHubPullRequestAnalysisRequest,
+  type GitHubPullRequestAnalysisResponse,
   type QuestionTaskResponse,
   type RegisterRepositoryRequest,
   type RepositoryOverviewResponse,
@@ -38,18 +39,34 @@ import {
   DocumentationReviewWorkflow,
   LocalDocumentationWorkspace,
   type DocumentationFactSnapshot,
-  type DocumentationReviewPreview,
 } from "@intellirepo/documentation";
+import { PostgresSemanticChunkStore, SemanticRetriever } from "@intellirepo/embeddings";
 import { PostgresCanonicalGraphReader, PostgresGraphTraversal } from "@intellirepo/graph";
+import {
+  BullMqScanDispatcher,
+  createIndexingExecutor,
+  IndexingRuntimeError,
+  InlineScanDispatcher,
+  OutboxDispatcher,
+  PostgresIndexingRuntime,
+  type ScanTargetInspector,
+} from "@intellirepo/indexing";
 import {
   EvidencePackBuilder,
   PostgresEntityLookup,
   PostgresStructuralEvidenceReader,
   QuestionCatalog,
+  QuestionTaskCatalog,
   RepositoryQuestionAnswerer,
   type RepositoryAnswer,
 } from "@intellirepo/qa";
-import { FilePolicy, LocalRepositoryAdapter } from "@intellirepo/repository";
+import {
+  FilePolicy,
+  GitChangeDetector,
+  GitHubPullRequestClient,
+  LocalRepositoryAdapter,
+  parseGitHubPullRequestUrl,
+} from "@intellirepo/repository";
 import { sql, type Kysely } from "kysely";
 
 export const PRODUCT_FACADE = Symbol("PRODUCT_FACADE");
@@ -72,6 +89,10 @@ export interface ProductFacade {
     query: DocumentationHealthQuery,
   ): Promise<DocumentationHealthResponse>;
   graph(repositoryId: string, query: GraphNeighborhoodRequest): Promise<GraphNeighborhoodResponse>;
+  analyzeGitHubPullRequest(
+    repositoryId: string,
+    input: GitHubPullRequestAnalysisRequest,
+  ): Promise<GitHubPullRequestAnalysisResponse>;
   impact(repositoryId: string, query: RevisionPairRequest): Promise<ChangeImpactResponse>;
   listRepositories(): Promise<readonly unknown[]>;
   overview(repositoryId: string): Promise<RepositoryOverviewResponse>;
@@ -94,10 +115,6 @@ export interface ProductFacade {
 export class ApiResourceNotFoundError extends Error {}
 export class ApiConflictError extends Error {}
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
 function activeRevisionQuery(database: Kysely<CatalogDatabase>, repositoryId: string) {
   return database
     .selectFrom("revisions")
@@ -118,6 +135,9 @@ export class DatabaseResource {
       await handle.destroy();
       throw migration.error;
     }
+    await new QuestionTaskCatalog(handle.database).failAbandoned(
+      "API restarted while this question was running; submit it again",
+    );
     return new DatabaseResource(handle);
   }
 
@@ -126,15 +146,11 @@ export class DatabaseResource {
   }
 }
 
-interface StoredQuestionTask extends QuestionTaskResponse<RepositoryAnswer> {
-  readonly repositoryId: string;
-}
-
 export class PostgresProductFacade implements ProductFacade {
   private readonly database: Kysely<CatalogDatabase>;
   private readonly localRepository: LocalRepositoryAdapter;
-  private readonly previews = new Map<string, DocumentationReviewPreview>();
-  private readonly questionTasks = new Map<string, StoredQuestionTask>();
+  private readonly ollama?: OllamaRuntime;
+  private readonly runtime: PostgresIndexingRuntime;
 
   public constructor(
     resource: DatabaseResource,
@@ -145,6 +161,58 @@ export class PostgresProductFacade implements ProductFacade {
       config.repositoryAllowedRoots,
       new FilePolicy(config.maxFileBytes),
     );
+    const detector = new GitChangeDetector(new FilePolicy(config.maxFileBytes));
+    const targetInspector: ScanTargetInspector = {
+      inspect: async (repositoryRoot) => ({
+        commitSha: await detector.headRevision(repositoryRoot),
+        worktreeFingerprint: await detector.fingerprintWorkingTree(repositoryRoot),
+      }),
+    };
+    this.runtime = new PostgresIndexingRuntime(this.database, config.indexingMode, targetInspector);
+    if (config.ollamaEnabled) {
+      this.ollama = new OllamaRuntime(
+        new OllamaClient({
+          baseUrl: config.ollamaBaseUrl,
+          concurrency: config.ollamaConcurrency,
+          timeoutMs: config.ollamaTimeoutMs,
+        }),
+        {
+          embeddingModel: config.ollamaEmbeddingModel,
+          generationModel: config.ollamaChatModel,
+        },
+      );
+    }
+  }
+
+  private async dispatchPendingScans(): Promise<void> {
+    const dispatcher =
+      this.config.indexingMode === "inline"
+        ? new InlineScanDispatcher({
+            execute: async (scanJobId) => {
+              const capabilities = await this.ollama?.inspect();
+              await createIndexingExecutor({
+                config: this.config,
+                database: this.database,
+                ...(capabilities?.embedder === undefined
+                  ? {}
+                  : { embedder: capabilities.embedder }),
+                owner: `api-inline-${String(process.pid)}`,
+              }).execute(scanJobId);
+            },
+          })
+        : BullMqScanDispatcher.connect(this.config.redisUrl as string, {
+            attempts: this.config.scanRetryCount + 1,
+            backoffMs: this.config.scanRetryBackoffMs,
+          });
+    try {
+      await new OutboxDispatcher(this.database, dispatcher, {
+        limit: 50,
+        owner: `api-outbox-${String(process.pid)}`,
+        retryBackoffMs: this.config.scanRetryBackoffMs,
+      }).pump();
+    } finally {
+      await dispatcher.close();
+    }
   }
 
   private async repository(repositoryId: string) {
@@ -316,30 +384,27 @@ export class PostgresProductFacade implements ProductFacade {
     repositoryId: string,
     input: TriggerScanRequest,
   ): Promise<ScanJobSnapshot> {
-    await this.repository(repositoryId);
-    const current = await activeRevisionQuery(this.database, repositoryId).executeTakeFirst();
-    const revision = await new RevisionCatalog(this.database).create({
-      commitSha: input.commitSha,
-      ...(current === undefined ? {} : { parentRevisionId: current.id }),
-      repositoryId,
-      status: "indexing",
-      worktreeFingerprint: input.worktreeFingerprint,
-    });
-    const time = nowIso();
-    const job: ScanJobSnapshot = {
-      attempt: 0,
-      completedStages: [],
-      createdAt: time,
-      degradedReasons: [],
-      id: createScanJobId({ repositoryId, revisionId: revision.id }),
-      repositoryId,
-      revisionId: revision.id,
-      stageTimings: {},
-      state: "QUEUED",
-      updatedAt: time,
+    const repository = await this.repository(repositoryId);
+    const detector = new GitChangeDetector(new FilePolicy(this.config.maxFileBytes));
+    const current = {
+      commitSha: await detector.headRevision(repository.root_path),
+      worktreeFingerprint: await detector.fingerprintWorkingTree(repository.root_path),
     };
-    await new ScanJobCatalog(this.database).save(job);
-    return job;
+    if (
+      (input.commitSha !== undefined && current.commitSha !== input.commitSha) ||
+      (input.worktreeFingerprint !== undefined &&
+        current.worktreeFingerprint !== input.worktreeFingerprint)
+    ) {
+      throw new ApiConflictError("Requested scan target does not match current repository content");
+    }
+    try {
+      const submission = await this.runtime.submit({ repositoryId, target: current });
+      await this.dispatchPendingScans();
+      return this.runtime.status(submission.scan.id);
+    } catch (error) {
+      if (error instanceof IndexingRuntimeError) throw new ApiConflictError(error.message);
+      throw error;
+    }
   }
 
   public async scan(repositoryId: string, jobId: string): Promise<ScanJobSnapshot> {
@@ -352,25 +417,15 @@ export class PostgresProductFacade implements ProductFacade {
   }
 
   public async retryScan(repositoryId: string, jobId: string): Promise<ScanJobSnapshot> {
-    const previous = await this.scan(repositoryId, jobId);
-    if (previous.state !== "FAILED")
-      throw new ApiConflictError(
-        `Scan job ${jobId} is ${previous.state}; only failed jobs can be retried`,
-      );
-    const retry: ScanJobSnapshot = {
-      attempt: previous.attempt + 1,
-      completedStages: previous.completedStages,
-      createdAt: previous.createdAt,
-      degradedReasons: previous.degradedReasons,
-      id: previous.id,
-      repositoryId,
-      revisionId: previous.revisionId,
-      stageTimings: previous.stageTimings,
-      state: "QUEUED",
-      updatedAt: nowIso(),
-    };
-    await new ScanJobCatalog(this.database).save(retry);
-    return retry;
+    await this.scan(repositoryId, jobId);
+    try {
+      const submission = await this.runtime.retry(jobId);
+      await this.dispatchPendingScans();
+      return this.runtime.status(submission.scan.id);
+    } catch (error) {
+      if (error instanceof IndexingRuntimeError) throw new ApiConflictError(error.message);
+      throw error;
+    }
   }
 
   public async searchEntities(
@@ -465,6 +520,80 @@ export class PostgresProductFacade implements ProductFacade {
       ...stored,
       generatedAt: report.created_at.toISOString(),
       markdown: report.markdown,
+    };
+  }
+
+  public async analyzeGitHubPullRequest(
+    repositoryId: string,
+    input: GitHubPullRequestAnalysisRequest,
+  ): Promise<GitHubPullRequestAnalysisResponse> {
+    await this.repository(repositoryId);
+    const identity = parseGitHubPullRequestUrl(input.pullRequestUrl);
+    const client = new GitHubPullRequestClient(
+      this.config.githubToken === undefined ? {} : { token: this.config.githubToken },
+    );
+    const [pullRequest, changedFiles, revisions, impact] = await Promise.all([
+      client.pullRequest(identity),
+      client.changedFiles(identity),
+      this.database
+        .selectFrom("revisions")
+        .select(["id", "commit_sha"])
+        .where("repository_id", "=", repositoryId)
+        .where("id", "in", [input.baseRevisionId, input.targetRevisionId])
+        .execute(),
+      this.impact(repositoryId, {
+        baseRevisionId: input.baseRevisionId,
+        targetRevisionId: input.targetRevisionId,
+      }),
+    ]);
+    const baseRevision = revisions.find(({ id }) => id === input.baseRevisionId);
+    const targetRevision = revisions.find(({ id }) => id === input.targetRevisionId);
+    if (baseRevision === undefined || targetRevision === undefined) {
+      throw new ApiResourceNotFoundError("Both PR revisions must be indexed for this repository");
+    }
+    if (
+      baseRevision.commit_sha !== pullRequest.baseSha ||
+      targetRevision.commit_sha !== pullRequest.headSha
+    ) {
+      throw new ApiConflictError(
+        "Indexed base/head revisions do not match the GitHub pull request commit SHAs",
+      );
+    }
+    const warnings = [
+      ...(pullRequest.isFork ? ["Pull request originates from a fork"] : []),
+      ...(changedFiles.some(({ patchState }) => patchState === "unavailable")
+        ? ["GitHub omitted one or more patches; canonical indexed revisions remain authoritative"]
+        : []),
+    ];
+    const markdown = [
+      `## IntelliRepo analysis — #${pullRequest.pullNumber}: ${pullRequest.title}`,
+      "",
+      ...warnings.map((warning) => `> ${warning}`),
+      ...(warnings.length === 0 ? [] : [""]),
+      impact.markdown,
+    ].join("\n");
+    const comment = input.publishComment
+      ? await client.upsertAnalysisComment(identity, markdown)
+      : undefined;
+    return {
+      changedFiles: changedFiles.map((file) => ({
+        patchState: file.patchState,
+        path: file.path,
+        ...(file.previousPath === undefined ? {} : { previousPath: file.previousPath }),
+        status: file.status,
+      })),
+      ...(comment === undefined ? {} : { comment }),
+      impact,
+      pullRequest: {
+        baseSha: pullRequest.baseSha,
+        headSha: pullRequest.headSha,
+        isFork: pullRequest.isFork,
+        number: pullRequest.pullNumber,
+        state: pullRequest.state,
+        title: pullRequest.title,
+        url: pullRequest.url,
+      },
+      warnings,
     };
   }
 
@@ -572,7 +701,6 @@ export class PostgresProductFacade implements ProductFacade {
       ...(input.targetPath === undefined ? {} : { targetPath: input.targetPath }),
       title: input.title,
     });
-    this.previews.set(preview.id, preview);
     await new DocumentationCatalog(this.database).saveReview(preview);
     return preview;
   }
@@ -582,23 +710,31 @@ export class PostgresProductFacade implements ProductFacade {
     reviewId: string,
   ): Promise<{ applied: true }> {
     const repository = await this.repository(repositoryId);
-    const preview = this.previews.get(reviewId);
-    if (preview === undefined || preview.repositoryId !== repositoryId)
+    const catalog = new DocumentationCatalog(this.database);
+    const stored = await catalog.findReview(repositoryId, reviewId);
+    if (stored === undefined)
       throw new ApiResourceNotFoundError(
         `Documentation review ${reviewId} is not pending for repository ${repositoryId}`,
       );
+    if (stored.state !== "pending") {
+      throw new ApiConflictError(`Documentation review ${reviewId} is ${stored.state}`);
+    }
+    const preview = stored.preview;
+    await this.revision(repositoryId, preview.revisionId);
+    if (!(await catalog.claimReview(repositoryId, reviewId, preview.revisionId))) {
+      throw new ApiConflictError(`Documentation review ${reviewId} is no longer pending`);
+    }
     const workflow = new DocumentationReviewWorkflow(
       new DocumentationGenerator(),
       new LocalDocumentationWorkspace(repository.root_path),
     );
-    await workflow.apply(preview, true);
-    await this.database
-      .updateTable("documentation_reviews")
-      .set({ applied_at: new Date(), state: "applied" })
-      .where("id", "=", reviewId)
-      .where("repository_id", "=", repositoryId)
-      .execute();
-    this.previews.delete(reviewId);
+    try {
+      await workflow.apply(preview, true);
+      await catalog.markReviewApplied(repositoryId, reviewId);
+    } catch (error) {
+      await catalog.releaseReview(repositoryId, reviewId);
+      throw error;
+    }
     return { applied: true };
   }
 
@@ -609,10 +745,14 @@ export class PostgresProductFacade implements ProductFacade {
     await this.repository(repositoryId);
     const revision = await this.revision(repositoryId, input.revisionId);
     const id = randomUUID();
-    const queued: StoredQuestionTask = { id, repositoryId, state: "queued", updatedAt: nowIso() };
-    this.questionTasks.set(id, queued);
-    void this.runQuestion(id, repositoryId, revision.id, input.question);
-    return queued;
+    const queued = await new QuestionTaskCatalog(this.database).create({
+      id,
+      question: input.question,
+      repositoryId,
+      revisionId: revision.id,
+    });
+    queueMicrotask(() => void this.runQuestion(id, repositoryId, revision.id, input.question));
+    return { id, state: "queued", updatedAt: queued.updated_at.toISOString() };
   }
 
   private async runQuestion(
@@ -621,33 +761,30 @@ export class PostgresProductFacade implements ProductFacade {
     revisionId: string,
     question: string,
   ): Promise<void> {
-    this.questionTasks.set(id, { id, repositoryId, state: "running", updatedAt: nowIso() });
+    const tasks = new QuestionTaskCatalog(this.database);
+    if (!(await tasks.markRunning(repositoryId, id))) return;
     try {
       const traversal = new PostgresGraphTraversal(new PostgresCanonicalGraphReader(this.database));
+      const capabilities = await this.ollama?.inspect();
       const answerer = new RepositoryQuestionAnswerer(
         new EvidencePackBuilder(
           traversal,
           new PostgresEntityLookup(this.database),
           new PostgresStructuralEvidenceReader(this.database),
+          capabilities?.embedder === undefined
+            ? undefined
+            : new SemanticRetriever(
+                new PostgresSemanticChunkStore(this.database),
+                capabilities.embedder,
+              ),
         ),
+        capabilities?.generator,
       );
       const result = await answerer.ask({ question, repositoryId, revisionId });
       await new QuestionCatalog(this.database).save(result);
-      this.questionTasks.set(id, {
-        id,
-        repositoryId,
-        result,
-        state: "succeeded",
-        updatedAt: nowIso(),
-      });
+      await tasks.succeed(repositoryId, id, result);
     } catch (error) {
-      this.questionTasks.set(id, {
-        error: error instanceof Error ? error.message : String(error),
-        id,
-        repositoryId,
-        state: "failed",
-        updatedAt: nowIso(),
-      });
+      await tasks.fail(repositoryId, id, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -655,12 +792,19 @@ export class PostgresProductFacade implements ProductFacade {
     repositoryId: string,
     taskId: string,
   ): Promise<QuestionTaskResponse<RepositoryAnswer>> {
-    const task = this.questionTasks.get(taskId);
-    if (task === undefined || task.repositoryId !== repositoryId)
+    const task = await new QuestionTaskCatalog(this.database).find(repositoryId, taskId);
+    if (task === undefined)
       throw new ApiResourceNotFoundError(
         `Question task ${taskId} was not found in repository ${repositoryId}`,
       );
-    return task;
+    const error = task.error as { message?: string } | null;
+    return {
+      ...(error?.message === undefined ? {} : { error: error.message }),
+      id: task.id,
+      ...(task.result === null ? {} : { result: task.result as unknown as RepositoryAnswer }),
+      state: task.state as QuestionTaskResponse<RepositoryAnswer>["state"],
+      updatedAt: task.updated_at.toISOString(),
+    };
   }
 
   public async diagnostics(repositoryId: string): Promise<ProductDiagnostics> {
@@ -670,13 +814,14 @@ export class PostgresProductFacade implements ProductFacade {
       projections.find(repositoryId, "analysis"),
       projections.find(repositoryId, "semantic"),
     ]);
+    const ollama = await this.ollama?.inspect();
     return {
       analysis: { state: analysis?.state ?? "not_analyzed" },
       canonicalStore: "postgresql",
       deterministicFeaturesAvailable: true,
       ollama: {
         enabled: this.config.ollamaEnabled,
-        state: this.config.ollamaEnabled ? "configured" : "disabled",
+        state: ollama?.state ?? "disabled",
       },
       repositoryId,
       semantic: {

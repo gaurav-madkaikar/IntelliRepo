@@ -391,6 +391,11 @@ pre,
   background: #d8fff9;
   border-color: #82d8ce;
 }
+.demo-chip.data-error {
+  color: #8f2f19;
+  background: #ffe0d6;
+  border-color: #f1a28a;
+}
 .top-actions button {
   padding: 0.45rem 0.65rem;
   border: 1px solid var(--line);
@@ -534,6 +539,290 @@ pre,
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   padding: 1.5rem 1.2rem;
+}
+.pipeline-seven {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.stage-pending {
+  border-color: #c8c4b8;
+  opacity: 0.58;
+}
+.stage-pending::after {
+  background: #c8c4b8;
+}
+.stage-active {
+  border-color: var(--signal);
+  background: linear-gradient(180deg, rgb(216 255 62 / 18%), transparent);
+}
+.stage-active::after {
+  background: var(--signal);
+  box-shadow: 0 0 0 4px rgb(216 255 62 / 18%);
+}
+
+.product-error {
+  min-height: 64vh;
+  padding: clamp(2rem, 8vw, 7rem);
+  display: grid;
+  grid-template-columns: 150px minmax(0, 700px);
+  align-content: center;
+  gap: 2rem;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-left: 8px solid var(--orange);
+}
+.product-error-code {
+  color: var(--orange);
+  font:
+    800 0.62rem/1.4 "SFMono-Regular",
+    monospace;
+  letter-spacing: 0.1em;
+}
+.product-error h1 {
+  margin: 0 0 1rem;
+  font:
+    800 clamp(2.3rem, 5vw, 5rem)/0.9 "Avenir Next Condensed",
+    sans-serif;
+  text-transform: uppercase;
+}
+.product-error p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.product-error a {
+  grid-column: 2;
+  width: fit-content;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--orange);
+  font:
+    800 0.65rem/1 "SFMono-Regular",
+    monospace;
+}
+.inline-error {
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  color: #8f2f19;
+  background: #ffe0d6;
+  border-left: 4px solid var(--orange);
+  font:
+    650 0.7rem/1.4 "SFMono-Regular",
+    monospace;
+}
+.live-empty {
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.live-repository-facts {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+.live-repository-facts dt,
+.live-repository-facts dd {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.68rem;
+}
+.live-repository-facts dt {
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.live-repository-facts dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-explorer-layout {
+  grid-template-columns: minmax(240px, 0.7fr) minmax(380px, 1.4fr) minmax(240px, 0.8fr);
+}
+.live-graph-list {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.live-graph-list article {
+  min-width: 0;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.35rem;
+  background: #ebe8de;
+  border-left: 3px solid var(--cyan);
+}
+.live-graph-list span {
+  color: var(--muted);
+  font:
+    700 0.54rem/1 "SFMono-Regular",
+    monospace;
+  text-transform: uppercase;
+}
+.live-graph-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.76rem;
+}
+.live-graph-list code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.55rem;
+}
+.live-edge-list {
+  padding: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.live-edge-list code {
+  padding: 0.55rem;
+  overflow: hidden;
+  color: var(--muted);
+  background: #ebe8de;
+  font-size: 0.56rem;
+}
+.task-state {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 0.7rem;
+  align-items: center;
+}
+.task-state code {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.55rem;
+}
+.live-document-toolbar {
+  grid-template-columns: minmax(220px, 1fr) 180px auto;
+}
+.live-document-toolbar label {
+  display: grid;
+  gap: 0.35rem;
+}
+.live-document-toolbar input,
+.live-document-toolbar select {
+  padding: 0.55rem;
+  border: 1px solid #444a47;
+  color: white;
+  background: #292e2d;
+}
+.live-documentation-layout {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.live-diff {
+  min-height: 420px;
+  max-height: 65vh;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  color: #dce2de;
+  background: #161a19;
+  font-size: 0.65rem;
+  line-height: 1.55;
+}
+.review-panel button {
+  margin: 1rem;
+  padding: 0.8rem;
+  border: 0;
+  background: var(--signal);
+  font:
+    800 0.6rem/1 "SFMono-Regular",
+    monospace;
+}
+.live-impact-groups {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+.live-impact-groups section {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+.live-impact-groups span {
+  color: var(--muted);
+  font:
+    700 0.55rem/1 "SFMono-Regular",
+    monospace;
+}
+.live-impact-groups code {
+  padding: 0.45rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #e8e5da;
+  font-size: 0.55rem;
+}
+.secondary-cta {
+  display: inline-block;
+  margin-left: 1.5rem;
+  padding-bottom: 0.3rem;
+  color: var(--signal);
+  border-bottom: 1px solid var(--signal);
+  font:
+    700 0.62rem/1 "SFMono-Regular",
+    monospace;
+}
+.fixture-demo {
+  min-height: 100vh;
+  padding: clamp(1.5rem, 5vw, 5rem);
+  background: var(--paper);
+}
+.fixture-demo > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: end;
+  margin-bottom: 2rem;
+}
+.fixture-demo > header span {
+  color: var(--orange);
+  font:
+    800 0.62rem/1 "SFMono-Regular",
+    monospace;
+}
+.fixture-demo > header h1 {
+  margin: 0.6rem 0;
+  font:
+    800 clamp(3rem, 7vw, 7rem)/0.85 "Avenir Next Condensed",
+    sans-serif;
+  text-transform: uppercase;
+}
+.fixture-demo > header p {
+  max-width: 700px;
+  color: var(--muted);
+}
+.demo-banner {
+  margin-bottom: 1rem;
+  padding: 0.7rem 1rem;
+  color: var(--ink);
+  background: var(--signal);
+  font:
+    800 0.62rem/1 "SFMono-Regular",
+    monospace;
+  letter-spacing: 0.1em;
+}
+.fixture-findings article {
+  padding: 0.8rem 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+.fixture-findings article b {
+  color: var(--orange);
+  font:
+    700 0.58rem/1 "SFMono-Regular",
+    monospace;
+}
+.fixture-findings article p {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
 }
 .stage {
   position: relative;

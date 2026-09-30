@@ -1,5 +1,7 @@
 # IntelliRepo Portfolio Vertical Slice Design
 
+> Historical design: the approved 2026-07-21 runtime integration design supersedes this document's optional Neo4j projection. The implemented slice is PostgreSQL-only for canonical storage and traversal, with pgvector inside PostgreSQL.
+
 **Status:** Approved design baseline
 
 **Date:** 2026-07-15

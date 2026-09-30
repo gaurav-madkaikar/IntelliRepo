@@ -18,8 +18,8 @@ export const registerRepositorySchema = z.object({
 });
 
 export const triggerScanSchema = z.object({
-  commitSha: z.string().trim().min(1).max(128).default("WORKTREE"),
-  worktreeFingerprint: z.string().trim().min(1).max(256),
+  commitSha: z.string().trim().min(1).max(128).optional(),
+  worktreeFingerprint: z.string().trim().min(1).max(256).optional(),
 });
 
 export const entitySearchSchema = z.object({
@@ -67,6 +67,13 @@ export const askQuestionSchema = z.object({
   revisionId: revisionIdSchema.optional(),
 });
 
+export const githubPullRequestAnalysisSchema = z.object({
+  baseRevisionId: revisionIdSchema,
+  publishComment: z.boolean().default(false),
+  pullRequestUrl: z.string().url().max(2_048),
+  targetRevisionId: revisionIdSchema,
+});
+
 export type RegisterRepositoryRequest = z.infer<typeof registerRepositorySchema>;
 export type TriggerScanRequest = z.infer<typeof triggerScanSchema>;
 export type EntitySearchRequest = z.infer<typeof entitySearchSchema>;
@@ -76,6 +83,28 @@ export type DocumentationHealthQuery = z.infer<typeof documentationHealthQuerySc
 export type DocumentationPreviewRequest = z.infer<typeof documentationPreviewSchema>;
 export type DocumentationApplyRequest = z.infer<typeof documentationApplySchema>;
 export type AskQuestionRequest = z.infer<typeof askQuestionSchema>;
+export type GitHubPullRequestAnalysisRequest = z.infer<typeof githubPullRequestAnalysisSchema>;
+
+export interface GitHubPullRequestAnalysisResponse {
+  readonly changedFiles: readonly {
+    readonly patchState: "available" | "unavailable";
+    readonly path: string;
+    readonly previousPath?: string;
+    readonly status: string;
+  }[];
+  readonly comment?: { readonly action: "created" | "updated"; readonly commentId: number };
+  readonly impact: ChangeImpactResponse;
+  readonly pullRequest: {
+    readonly baseSha: string;
+    readonly headSha: string;
+    readonly isFork: boolean;
+    readonly number: number;
+    readonly state: string;
+    readonly title: string;
+    readonly url: string;
+  };
+  readonly warnings: readonly string[];
+}
 
 export type CapabilityState = "current" | "degraded" | "disabled" | "failed" | "stale";
 

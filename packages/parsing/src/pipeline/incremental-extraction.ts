@@ -33,7 +33,7 @@ export class IncrementalExtractionCoordinator {
     }
     const artifactByPath = new Map(input.artifacts.map((artifact) => [artifact.path, artifact]));
     const parsedPaths = input.changeSet.changes.flatMap((change) =>
-      "current" in change ? [change.current.path] : [],
+      "current" in change && artifactByPath.has(change.current.path) ? [change.current.path] : [],
     );
     const removedPaths = input.changeSet.changes.flatMap((change) =>
       change.kind === "deleted" || change.kind === "renamed" ? [change.previous.path] : [],

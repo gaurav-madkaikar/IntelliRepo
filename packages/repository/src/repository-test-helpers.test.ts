@@ -66,9 +66,7 @@ describe("LocalRepositoryAdapter", () => {
       "README.md",
       "src/index.ts",
     ]);
-    expect(inventory.diagnostics).toEqual([
-      expect.objectContaining({ decision: expect.objectContaining({ reason: "binary" }) }),
-    ]);
+    expect(inventory.diagnostics).toEqual([expect.objectContaining({ reason: "binary" })]);
   });
 
   it("rejects repositories outside configured roots and escaping symlinks", async () => {

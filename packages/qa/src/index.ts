@@ -5,3 +5,4 @@ export * from "./postgres-evidence.js";
 export * from "./qa-model.js";
 export * from "./question-answerer.js";
 export * from "./question-catalog.js";
+export * from "./question-task-catalog.js";

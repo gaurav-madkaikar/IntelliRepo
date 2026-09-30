@@ -7,6 +7,7 @@
     { "path": "./packages/ai" },
     { "path": "./packages/catalog" },
     { "path": "./packages/repository" },
+    { "path": "./packages/indexing" },
     { "path": "./packages/parsing" },
     { "path": "./packages/graph" },
     { "path": "./packages/impact" },

@@ -1,7 +1,12 @@
 import { AskConsole } from "../../../../components/ask-console";
 import { PageIntro } from "../../../../components/ui";
 
-export default function AskPage() {
+export default async function AskPage({
+  params,
+}: {
+  readonly params: Promise<{ repositoryId: string }>;
+}) {
+  const { repositoryId } = await params;
   return (
     <>
       <PageIntro
@@ -9,7 +14,7 @@ export default function AskPage() {
         title="Question the graph"
         summary="Answers are revision-scoped, citation-validated, and explicit about inference or unavailable model capabilities."
       />
-      <AskConsole />
+      <AskConsole repositoryId={repositoryId} />
     </>
   );
 }

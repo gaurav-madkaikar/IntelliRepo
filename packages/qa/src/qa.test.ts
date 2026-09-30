@@ -35,7 +35,7 @@ const nodes: readonly GraphNode[] = [
   },
 ];
 
-function traversalResult(adapter: TraversalAdapter): TraversalResult {
+function traversalResult(adapter: TraversalAdapter = "postgresql"): TraversalResult {
   return {
     adapter,
     edges: [
@@ -49,15 +49,7 @@ function traversalResult(adapter: TraversalAdapter): TraversalResult {
     ],
     missingStartEntityKeys: [],
     nodes,
-    projection: {
-      ...(adapter === "postgresql"
-        ? {
-            degradedReason: "Neo4j disabled; canonical PostgreSQL selected",
-            state: "disabled" as const,
-          }
-        : { state: "current" as const }),
-      requestedRevisionId: "r2",
-    },
+    projection: { requestedRevisionId: "r2", state: "current" },
     repositoryId: "repo",
     revisionId: "r2",
     truncated: false,
@@ -129,36 +121,34 @@ describe("question intent routing", () => {
 });
 
 describe("RepositoryQuestionAnswerer", () => {
-  for (const adapter of ["postgresql", "neo4j"] as const) {
-    it(`answers structural endpoint flow through the ${adapter} traversal adapter`, async () => {
-      const queries: TraversalQuery[] = [];
-      const traversal: GraphTraversal = {
-        traverse: (query) => {
-          queries.push(query);
-          return Promise.resolve(traversalResult(adapter));
-        },
-      };
-      const answerer = new RepositoryQuestionAnswerer(
-        new EvidencePackBuilder(traversal, lookup, structuralEvidence),
-      );
-      const answer = await answerer.ask({
-        question: "What happens when POST /api/login is called?",
-        repositoryId: "repo",
-        revisionId: "r2",
-      });
-
-      expect(answer.answer).toContain("AuthService");
-      expect(answer.citations).toHaveLength(2);
-      expect(answer.confidence).toBe("high");
-      expect(answer.degradedReasons).toContain(
-        "Ollama is unavailable; returned deterministic evidence",
-      );
-      expect(queries[0]).toMatchObject({
-        mode: "endpoint-flow",
-        relationshipKinds: ["HANDLES", "CALLS", "USES_MIDDLEWARE", "READS_CONFIG"],
-      });
+  it("answers structural endpoint flow through canonical PostgreSQL traversal", async () => {
+    const queries: TraversalQuery[] = [];
+    const traversal: GraphTraversal = {
+      traverse: (query) => {
+        queries.push(query);
+        return Promise.resolve(traversalResult());
+      },
+    };
+    const answerer = new RepositoryQuestionAnswerer(
+      new EvidencePackBuilder(traversal, lookup, structuralEvidence),
+    );
+    const answer = await answerer.ask({
+      question: "What happens when POST /api/login is called?",
+      repositoryId: "repo",
+      revisionId: "r2",
     });
-  }
+
+    expect(answer.answer).toContain("AuthService");
+    expect(answer.citations).toHaveLength(2);
+    expect(answer.confidence).toBe("high");
+    expect(answer.degradedReasons).toContain(
+      "Ollama is unavailable; returned deterministic evidence",
+    );
+    expect(queries[0]).toMatchObject({
+      mode: "endpoint-flow",
+      relationshipKinds: ["HANDLES", "CALLS", "USES_MIDDLEWARE", "READS_CONFIG"],
+    });
+  });
 
   it("treats repository prompt injection as evidence and never query policy", async () => {
     const traverse = vi.fn((_query: TraversalQuery) => {
